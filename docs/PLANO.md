@@ -229,21 +229,27 @@ Nenhum destes apareceria sem executar de fato. Todos são material de seção de
 
 ## Divisão de tarefas
 
-Alocada por afinidade com o T1. A rubrica premia equilíbrio visível na distribuição, e isso precisa aparecer no relatório e no vídeo.
+Alocada por afinidade com o T1 e por **grau de dependência**. A rubrica premia equilíbrio visível na distribuição, e isso precisa aparecer no relatório e no vídeo.
 
-**Gabriel** (Módulo B e relatório no T1) — **base do projeto**: contratos `.proto`, schema, seed, matriz de acesso e mapeamento FHIR, entregues como fundação para o grupo. **Data Transform Service** completo: projeção por nível, Bundle FHIR, `MeasureReport`, pseudonimização, métricas Prometheus de domínio, 52 testes. Acumula **dono do relatório**.
-> **Estado: entregue.** `proto/`, `db/`, `docs/`, `servicos/transform/`.
+O critério que organiza a lista: quem depende de menos gente fica com o que pode ser terminado primeiro. O chat `epoll` é a única entrega grande do projeto com **zero dependências** — não fala com Gateway, Auth, Data, banco nem Kubernetes —, então vai para quem precisa fechar sua parte cedo.
 
-**Danilo** (protos e teoria gRPC no T1) — **Authorization Service** (decodifica JWT, aplica as regras de `docs/matriz-acesso.md` §1 sobre `user_patient_assignments` e `projects`, decide ALLOW/DENY + nível) e **Keycloak** (realm como código em `keycloak/realm-hospital.json`, três roles, usuários de teste, tokens RS256, JWKS).
-> Contrato pronto em `proto/auth.proto`. Regras normativas em `docs/matriz-acesso.md`. Rode `./scripts/gen_protos.sh` e code contra os stubs.
+**Gabriel** (Módulo B e relatório no T1) — quatro a cinco frentes, todas independentes do resto do grupo:
+1. **Base do projeto**: contratos `.proto`, schema, seed, índices, matriz de acesso, mapeamento FHIR. ✅ entregue
+2. **Data Transform Service**: projeção por nível, Bundle FHIR, `MeasureReport`, pseudonimização, métricas de domínio, 52 testes. ✅ entregue
+3. **Chat `epoll` + experimento C10K**: três servidores em C (`epoll` edge-triggered, thread-por-conexão, `select`), gerador de carga de conexões, medição de RSS, CPU e latência até cada um quebrar.
+4. **Scripts k6 dos cenários A/B/C/D**: escritos contra os contratos; o Luiz executa quando o cluster estiver de pé.
+5. **Estrutura do relatório** e todas as seções que não dependem de resultado (introdução, metodologia, arquitetura, Transform, FHIR/anonimização, chat/C10K, referências), com as tabelas de resultado como esqueleto a preencher.
 
-**Guilherme** (Gateway P no T1) — **API Gateway** (validação de JWT contra o JWKS, orquestração do pipeline sequencial, `prom-client`), **Patient Data Service** (SQL e agregações), e o **chat em C com `epoll`** mais o experimento comparativo contra thread-por-conexão. Controla as duas pontas do contrato Gateway↔Data.
-> Contratos prontos em `proto/data.proto`. Escopo→filtro em `docs/matriz-acesso.md` §3. As consultas SQL de referência (caminho leve e agregação) estão validadas com `EXPLAIN ANALYZE`.
+**Danilo** (protos e teoria gRPC no T1) — **Keycloak** (realm como código em `keycloak/realm-hospital.json`, três roles, usuários de teste, RS256, JWKS), **Authorization Service** (regras de `docs/matriz-acesso.md` §1 sobre `user_patient_assignments` e `projects`), **Patient Data Service** (SQL e agregações) e o **experimento pgbouncer** (medir a saturação do pool, instalar o pgbouncer, medir de novo).
+> Auth e Data são os dois serviços que falam SQL e leem as mesmas cinco tabelas — quem escreve as regras já tem o schema na cabeça. Contratos em `proto/auth.proto` e `proto/data.proto`. Escopo→filtro em `docs/matriz-acesso.md` §3. Consultas de referência validadas com `EXPLAIN ANALYZE`.
 
-**Luiz** (Docker/K8s no T1) — **cluster kind** de 4 nós e **cluster kubeadm em VMs**, `kube-prometheus-stack`, Grafana provisionado, HPA (por CPU e customizado via `prometheus-adapter`), metrics-server, Dashboard, **harness k6** e execução dos testes, experimentos de resiliência.
+**Guilherme** (Gateway P no T1) — **API Gateway** (validação de JWT contra o JWKS, orquestração do pipeline sequencial, `prom-client`), **frontend** (login OIDC e tela de consulta por perfil), **validação funcional ponta a ponta** (`scripts/validacao_funcional.sh` contra as 15 linhas da matriz de teste, que é a fase *a*) e **OpenTelemetry** (propagação de contexto pelos metadados gRPC).
+> Frontend e Gateway são os dois lados da mesma conversa REST — a fronteira HTTP inteira num dono só.
+
+**Luiz** (Docker/K8s no T1) — **cluster kind** de 4 nós e **cluster kubeadm em VMs**, `kube-prometheus-stack` com Grafana provisionado, SLO e alerta, **HPA** (por CPU e customizado via `prometheus-adapter`), metrics-server, Dashboard, Jaeger e Loki, **execução das corridas de carga** e experimentos de **resiliência**, mais a **consolidação final do relatório e do vídeo**.
 > `servicos/transform/Dockerfile` serve de molde: build a partir da raiz, stubs gerados no build, imagem não-root. Perfis de `requests`/`limits` já definidos neste plano.
 
-**Transversal, de todos:** OpenTelemetry na própria parte, e a gravação do próprio trecho de vídeo.
+**Transversal, de todos:** instrumentar OpenTelemetry no próprio serviço, e gravar o próprio trecho de vídeo.
 
 Relatório e vídeo correm em paralelo desde que o pipeline local esteja de pé, não no fim.
 

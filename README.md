@@ -4,7 +4,7 @@ Aplicação de microsserviços para o Hospital Universitário, com dados clínic
 
 Disciplina PSPD (T02), Prof. Fernando William Cruz — UnB/FGA. Grupo DGGL.
 
-> **Estado atual: base entregue.** Contratos, banco, especificações e o Data Transform Service estão implementados e verificados. Authorization Service, Patient Data Service, API Gateway, chat epoll e a stack de observabilidade estão especificados e aguardando implementação. Ver [Divisão de tarefas](#divisão-de-tarefas).
+> **Estado atual.** Contratos, banco, especificações, Data Transform Service, chat `epoll` com o experimento C10K e os cenários de carga k6 estão implementados e verificados. Authorization Service, Patient Data Service, API Gateway, frontend e a stack de observabilidade estão especificados e aguardando implementação. Ver [Divisão de tarefas](#divisão-de-tarefas).
 
 ## Arquitetura
 
@@ -31,6 +31,8 @@ O Gateway valida o JWT contra o JWKS do Keycloak e orquestra um **pipeline seque
 | Matriz de nível de acesso | `docs/matriz-acesso.md` | — (normativo) |
 | Mapeamento relacional → FHIR | `docs/mapeamento-fhir.md` | — (normativo) |
 | **Data Transform Service** | `servicos/transform/` | 52 testes + smoke gRPC + container |
+| **Chat `epoll` + experimento C10K** | `chat/` | 3 servidores em C, medidos até 10k conexões |
+| **Cenários de carga k6** | `k6/` | 4 cenários, validados com `k6 inspect` |
 
 ### O contraste que sustenta o experimento
 
@@ -42,6 +44,18 @@ Os índices são projetados para que os dois caminhos custem coisas diferentes. 
 | AGGREGATED — coorte Diabetes | **154,6 ms** | parallel seq scan de 961k linhas + sort externo em disco |
 
 Fator de ~620×. A coorte em si é resolvida por índice (barato, de propósito); o custo está na agregação. É isso que permite testar a hipótese central do trabalho: **escala horizontal ajuda serviço stateless compute-bound, mas não resolve um banco compartilhado.**
+
+### C10K: o custo de uma conexão ociosa
+
+Três servidores de chat com o mesmo protocolo, 10 mil conexões e 1% ativas (`docs/experimento-c10k.md`):
+
+| | memória por conexão | msgs por segundo de CPU | conexões aceitas |
+|---|---|---|---|
+| `epoll` | **4,2 KB** | **273.238** | 10.000 |
+| thread-por-conexão | 12,4 KB | 75.603 | 10.000 |
+| `select()` | — | — | **1.020** (teto do `FD_SETSIZE`) |
+
+O `epoll` mantém a mesma eficiência com mil ou dez mil conexões: é a propriedade O(1) medida. O `select()` não é lento, é impossível — `fd_set` tem 1024 bits e o limite é da libc, não do programa.
 
 ## Como rodar o que existe
 
@@ -77,16 +91,27 @@ docker build -f servicos/transform/Dockerfile -t pspd/transform:0.1.0 .
 docker run -d -e ANON_SALT=troque-isto -p 50053:50053 -p 8000:8000 pspd/transform:0.1.0
 ```
 
+Chat e experimento C10K:
+
+```bash
+cd chat && make todos
+./bin/servidor_epoll 9100 --metricas 9101 &
+./bin/cliente_chat 127.0.0.1 9100 ana          # em outro terminal
+./scripts/experimento_c10k.sh 8 1000 5000 10000
+```
+
 `ANON_SALT` não tem valor padrão e o serviço **falha alto** sem ele. Isso é intencional: o espaço de `id_paciente` é pequeno e conhecido (50 mil valores), então pseudonimizar com salt público é reversível por força bruta em segundos. Ver `docs/matriz-acesso.md` §2.
 
 ## Divisão de tarefas
 
+A alocação segue afinidade com o T1 e **grau de dependência**: quem depende de menos gente fica com o que pode ser terminado primeiro.
+
 | Integrante | Responsabilidade | Estado |
 |---|---|---|
-| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações), **Data Transform Service**, relatório | ✅ base entregue |
-| **Danilo Carvalho Antunes** | **Authorization Service**, Keycloak (realm como código, JWKS) | ⬜ especificado |
-| **Guilherme Brito de Souza** | **API Gateway** (validação JWKS, orquestração, `prom-client`), **Patient Data Service**, **chat `epoll`** | ⬜ especificado |
-| **Luiz Gustavo Lopes Campos** | Cluster **kind** de 4 nós + runbook **kubeadm/VM**, `kube-prometheus-stack`, Grafana, HPA, harness **k6** | ⬜ especificado |
+| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · estrutura do relatório | ✅ base e Transform entregues |
+| **Danilo Carvalho Antunes** | Keycloak (realm como código, JWKS) · **Authorization Service** · **Patient Data Service** · experimento pgbouncer | ⬜ especificado |
+| **Guilherme Brito de Souza** | **API Gateway** (validação JWKS, orquestração, `prom-client`) · frontend · validação funcional ponta a ponta · OpenTelemetry | ⬜ especificado |
+| **Luiz Gustavo Lopes Campos** | Cluster **kind** de 4 nós + **kubeadm/VM** · `kube-prometheus-stack`, Grafana, SLO · HPA (CPU + customizado) · execução das corridas de carga e resiliência · consolidação do relatório e vídeo | ⬜ especificado |
 
 O plano completo, com orçamento de RAM, cenários de carga, riscos conhecidos e critérios de verificação, está em `docs/PLANO.md`.
 
