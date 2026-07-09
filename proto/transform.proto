@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package transform;
+
+import "comum.proto";
+
+// Aplica o nível de acesso e converte para HL7/FHIR, nessa ordem.
+// Ver docs/mapeamento-fhir.md.
+service DataTransformService {
+  rpc TransformarParaFHIR(RequisicaoTransformacao) returns (RespostaFHIR);
+}
+
+message RequisicaoTransformacao {
+  comum.NivelAcesso nivel  = 1;
+  string            escopo = 2;
+
+  oneof carga {
+    comum.ConjuntoDadosClinicos dados    = 3;
+    comum.ResultadoAgregado     agregado = 4;
+  }
+}
+
+message RespostaFHIR {
+  string fhir_bundle_json = 1;
+  int32  total_recursos   = 2;
+
+  // Eco do nível recebido, para o Gateway assertar que foi honrado.
+  comum.NivelAcesso nivel_aplicado = 3;
+}

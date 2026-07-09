@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package data;
+
+import "comum.proto";
+
+// Único componente que fala SQL. Devolve forma interna crua: nunca FHIR,
+// nunca anonimizado. Recebe apenas ids já autorizados pelo AuthService.
+service PatientDataService {
+  rpc BuscarPacientes(FiltroPacientes) returns (comum.ConjuntoDadosClinicos);
+  rpc AgregarCoorte(FiltroCoorte) returns (comum.ResultadoAgregado);
+  rpc ListarProjetos(FiltroPesquisador) returns (ListaProjetos);
+}
+
+message FiltroPacientes {
+  repeated string ids_pacientes = 1;
+
+  bool incluir_atendimentos = 2;
+  bool incluir_eventos      = 3;
+
+  string tipo_evento = 4;  // vazio = todos; restringe clinical_events.tipo_evento
+  int32  limite_eventos = 5;  // 0 = sem limite
+}
+
+message FiltroCoorte {
+  string codigo_condicao = 1;
+  bool   incluir_exames_por_paciente = 2;
+  int32  limite_pacientes            = 3;
+}
+
+message FiltroPesquisador {
+  string username = 1;
+}
+
+message ListaProjetos {
+  repeated comum.Projeto projetos = 1;
+}

@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package auth;
+
+import "comum.proto";
+
+// Decide se a consulta é permitida e com que nível de detalhe.
+// Não devolve dado clínico: devolve a decisão e os ids que o Gateway
+// está autorizado a pedir ao PatientDataService.
+service AuthService {
+  rpc AutorizarConsulta(RequisicaoAutorizacao) returns (RespostaAutorizacao);
+}
+
+message RequisicaoAutorizacao {
+  string username = 1;  // extraído do JWT já validado pelo Gateway
+  string role     = 2;  // MEDICO | ESTAGIARIO | PESQUISADOR
+
+  // ListaPacientes | ResumoClinico | HistoricoClinico | Exames | Medicamentos
+  // ResumoCoorte | EstatisticasCoorte | ExamesCoorte | MeusProjetos
+  string escopo = 3;
+
+  repeated string ids_pacientes = 4;  // escopos por paciente
+
+  string codigo_condicao = 5;  // escopos de coorte
+  string id_projeto      = 6;
+}
+
+message RespostaAutorizacao {
+  bool              permitido = 1;
+  comum.NivelAcesso nivel     = 2;
+
+  // Subconjunto de ids_pacientes efetivamente liberado. Ver docs/matriz-acesso.md §1.
+  repeated string ids_autorizados = 3;
+
+  string motivo_negacao = 4;  // só quando permitido=false
+}

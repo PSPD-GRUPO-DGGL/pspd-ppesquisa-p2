@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package comum;
+
+enum NivelAcesso {
+  NIVEL_INDEFINIDO = 0;
+  FULL             = 1;
+  PARTIAL          = 2;
+  ANONYMIZED       = 3;
+  AGGREGATED       = 4;
+  DENY             = 5;
+}
+
+message Paciente {
+  string id_paciente     = 1;
+  string nome            = 2;
+  string data_nascimento = 3;  // YYYY-MM-DD
+  string genero          = 4;  // male | female | other | unknown
+  string cidade          = 5;
+  string estado          = 6;
+  string cpf             = 7;
+  string cns             = 8;
+}
+
+message Atendimento {
+  string id_atendimento   = 1;
+  string id_paciente      = 2;
+  string data_inicio      = 3;
+  string data_fim         = 4;
+  string tipo_atendimento = 5;  // Ambulatorial | Emergencia | Internacao | Retorno
+  string setor            = 6;
+}
+
+// tipo_evento discrimina o Resource FHIR de saída:
+// Condicao -> Condition, Observacao -> Observation, Medicacao -> MedicationRequest.
+// valor e unidade só são preenchidos para Observacao e Medicacao.
+message EventoClinico {
+  string id_evento          = 1;
+  string id_paciente        = 2;
+  string id_atendimento     = 3;
+  string tipo_evento        = 4;
+  string codigo_tipo_evento = 5;
+  string descricao          = 6;
+  string data_evento        = 7;
+  double valor              = 8;
+  string unidade            = 9;
+}
+
+message ConjuntoDadosClinicos {
+  repeated Paciente      pacientes    = 1;
+  repeated Atendimento   atendimentos = 2;
+  repeated EventoClinico eventos      = 3;
+}
+
+message Contagem {
+  string chave      = 1;
+  int64  valor      = 2;
+  double percentual = 3;
+}
+
+message Estatistica {
+  string nome           = 1;
+  double media          = 2;
+  double mediana        = 3;
+  double desvio_padrao  = 4;
+  int64  n              = 5;
+  string unidade        = 6;
+}
+
+message Projeto {
+  string id_projeto       = 1;
+  string titulo           = 2;
+  string username         = 3;
+  string codigo_condicao  = 4;
+  string status           = 5;  // Aprovado | Expirado | Suspenso
+  string data_validade    = 6;
+}
+
+message ResultadoAgregado {
+  string               codigo_condicao           = 1;
+  int64                total_pacientes           = 2;
+  repeated Contagem    distribuicao_sexo         = 3;
+  repeated Contagem    distribuicao_faixa_etaria = 4;
+  repeated Contagem    distribuicao_setor        = 5;
+  repeated Contagem    frequencia_medicamentos   = 6;
+  repeated Estatistica estatisticas_exames       = 7;
+}
