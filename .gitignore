@@ -8,3 +8,4 @@ __pycache__/
 resultados/*.json
 .env
 .venv/
+chat/bin/
