@@ -108,7 +108,7 @@ A alocação segue afinidade com o T1 e **grau de dependência**: quem depende d
 
 | Integrante | Responsabilidade | Estado |
 |---|---|---|
-| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · estrutura do relatório | ✅ base e Transform entregues |
+| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · estrutura do relatório | ✅ tudo entregue, exceto o relatório |
 | **Danilo Carvalho Antunes** | Keycloak (realm como código, JWKS) · **Authorization Service** · **Patient Data Service** · experimento pgbouncer | ⬜ especificado |
 | **Guilherme Brito de Souza** | **API Gateway** (validação JWKS, orquestração, `prom-client`) · frontend · validação funcional ponta a ponta · OpenTelemetry | ⬜ especificado |
 | **Luiz Gustavo Lopes Campos** | Cluster **kind** de 4 nós + **kubeadm/VM** · `kube-prometheus-stack`, Grafana, SLO · HPA (CPU + customizado) · execução das corridas de carga e resiliência · consolidação do relatório e vídeo | ⬜ especificado |

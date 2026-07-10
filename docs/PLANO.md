@@ -165,17 +165,25 @@ Escalar por CPU é o exemplo do enunciado. Escalar por **requisições por segun
 
 Instalar `prometheus-adapter`, expor `transform_duration_seconds` e a taxa de RPS como *custom metrics* na API do Kubernetes, e configurar um segundo HPA para o Transform escalando por latência p95 em vez de CPU. Rodar o **mesmo cenário C com os dois HPAs** e comparar: qual reage mais rápido, qual overshoota, qual estabiliza melhor. Isso é um experimento controlado com uma variável independente, e é exatamente o tipo de "descoberta" que a rubrica recompensa.
 
-### Chat full-duplex com `epoll` — o componente que ninguém mais vai ter
+### Chat full-duplex com `epoll` — ✅ ENTREGUE (Gabriel)
 
-Requisito do quadro. Também o único componente que toca o coração da ementa de PSPD: comunicação interprocessos, I/O multiplexing, chamadas de sistema. É o pedaço mais valioso do projeto e não deve ser tratado como apêndice.
+Requisito do quadro. Também o único componente que toca o coração da ementa de PSPD: comunicação interprocessos, I/O multiplexing, chamadas de sistema.
 
-**Implementação:** servidor de chat em C, sockets não-bloqueantes, `epoll` em modo *edge-triggered*, um único thread event-loop, protocolo de mensagem simples sobre TCP. Containerizado (build multi-stage a partir de `gcc`, imagem final `scratch`/`alpine` — vai ficar minúscula, ~20 MB de RSS, e isso é um ponto a comentar contra os ~80 MB de cada pod Python).
+Implementado em `chat/`: servidor `epoll` *edge-triggered* single-threaded com buffer de saída por conexão e métricas Prometheus (`chat_conexoes_ativas`, `chat_mensagens_total`, `chat_bytes_enviados_total`, `chat_epoll_wait_duration_seconds`); mais duas variantes do mesmo protocolo para comparação, `select()` e thread-por-conexão; um cliente que multiplexa `stdin` e socket; e um gerador de carga de conexões.
 
-**Integração:** entra no cluster como quarto microsserviço, atrás do Gateway, exposto por WebSocket. Médico e estagiário conversam sobre um paciente; o Gateway injeta o contexto de autorização, de modo que o chat respeita o mesmo modelo de acesso. Expõe métricas Prometheus (`chat_conexoes_ativas`, `chat_mensagens_total`, `chat_epoll_wait_duration_seconds`) — porque tudo neste projeto é observável.
+**Resultados medidos** (10k conexões, 1% ativas — análise completa em `docs/experimento-c10k.md`):
 
-**O experimento que vale a nota:** implementar uma segunda versão do mesmo servidor com **thread-por-conexão** e comparar as duas sob carga crescente de conexões concorrentes (1k, 5k, 10k), medindo memória residente, uso de CPU, latência de mensagem e o ponto em que cada uma quebra. Isso é o problema C10K, reproduzido, medido e explicado — inclusive por que `epoll` é O(1) no número de descritores enquanto `select`/`poll` são O(n), e o que muda entre level-triggered e edge-triggered. Um servidor `select()` como terceira curva do gráfico custa pouco e completa o argumento.
+| | memória por conexão | msgs por segundo de CPU | conexões aceitas |
+|---|---|---|---|
+| `epoll` | 4,2 KB | 273.238 | 10.000 |
+| thread-por-conexão | 12,4 KB | 75.603 | 10.000 |
+| `select()` | — | — | 1.020 (teto do `FD_SETSIZE`) |
 
-Este experimento, sozinho, sustenta a seção mais forte do relatório e o trecho mais interessante do vídeo.
+O `epoll` mantém a mesma eficiência com mil ou dez mil conexões: a propriedade O(1) medida. O `select()` não é lento — é impossível: `fd_set` tem 1024 bits, fixados na compilação da libc.
+
+Achado que contraria a narrativa fácil: em p95 o servidor de threads foi competitivo, porque usa 2,4 núcleos enquanto nosso `epoll` usa um. Ele gastou 2,4× mais CPU para entregar 34% menos mensagens. A comparação justa seria `epoll` com `SO_REUSEPORT`, um processo por núcleo. Registrado como limitação em vez de escondido.
+
+**Pendente (Guilherme):** integração no cluster atrás do Gateway, exposto por WebSocket, com o contexto de autorização injetado. O servidor é autônomo; a integração é um adaptador.
 
 ---
 
@@ -258,13 +266,13 @@ Relatório e vídeo correm em paralelo desde que o pipeline local esteja de pé,
 ## Ordem de execução
 
 1. ✅ **Sprint 0.** Contratos, schema, seed, matriz de acesso, mapeamento FHIR — entregues por Gabriel. Falta o kind de pé (Luiz).
-2. **Serviços restantes contra os stubs.** Danilo faz Auth + Keycloak; Guilherme faz Data + Gateway. O Transform já responde.
+2. **Serviços restantes contra os stubs.** Danilo faz Keycloak + Auth + Data; Guilherme faz Gateway + frontend. O Transform já responde.
 3. **Pipeline local** via docker-compose, ponta a ponta com os três perfis, os quatro níveis e os DENY. Aqui a fase (a) está cumprida. Validar com `scripts/validacao_funcional.sh` contra as 15 linhas da matriz de teste.
 4. **Migrar para o kind.** Build → `kind load` → `apply`, já com `requests`/`limits` e probes desde o primeiro manifesto.
 5. **Instrumentação.** `prom-client` no gateway, interceptor nos serviços Python (molde em `servicos/transform/metricas.py`), postgres_exporter, ServiceMonitors, `kube-prometheus-stack`, dashboards provisionados, SLO e alerta.
-6. **Fases b → c → d.** k6 de fora, 10→1000; escala manual 1→3; HPA por CPU. Cenários A/B/C/D.
+6. **Fases b → c → d.** k6 de fora, 10→1000; escala manual 1→3; HPA por CPU. Os cenários A/B/C/D já estão escritos em `k6/cenarios/`; Luiz os executa.
 7. **Camada 3.** OTel + Jaeger + Loki; `prometheus-adapter` e o HPA por latência com o comparativo; pgbouncer com medição antes/depois; experimentos de resiliência.
-8. **Chat epoll** e o experimento C10K. Independente do resto — Guilherme pode atacá-lo assim que o Gateway estiver estável.
+8. ✅ **Chat epoll e experimento C10K** — entregues por Gabriel, independentes do resto. Resta a Guilherme integrá-lo atrás do Gateway.
 9. **Cluster kubeadm em VMs**, validação funcional da aplicação nele.
 10. **Cauda paralela.** Relatório e vídeos desde o passo 3.
 
@@ -326,6 +334,6 @@ Todos em `/home/anjos/github/pspsd_ppesquisa_p1/`:
 
 **HPA.** `kubectl get hpa -w` durante um teste k6: a coluna `TARGETS` precisa mostrar percentual, não `<unknown>` — `<unknown>` significa `requests.cpu` faltando. `kubectl get pods -w` deve mostrar réplicas nascendo.
 
-**Chat.** Dois clientes conectados trocando mensagens simultaneamente (full-duplex de verdade, não request/response). Depois o teste de carga de conexões: subir para 10k conexões concorrentes contra a versão `epoll` e contra a versão thread-por-conexão, medindo RSS, CPU e latência, e registrar onde cada uma quebra.
+**Chat.** ✅ Verificado. Dois clientes trocando mensagens simultaneamente na mesma conexão (full-duplex, não request/response), e o experimento de carga até 10k conexões contra as três variantes. Reproduzir com `cd chat && make todos && ./scripts/experimento_c10k.sh 8 1000 5000 10000`. Resultados em `chat/resultados/c10k.csv`, análise em `docs/experimento-c10k.md`.
 
 **Carga.** Cada cenário roda pelo k6 no host contra `localhost:30080`, com saída simultânea para JSON em `resultados/` e para o Prometheus via remote-write. O relatório compara throughput, latência média e p95, CPU, memória e taxa de erro entre 10/50/100/500/1000 VUs, para quatro configurações: 1 réplica, 3 réplicas fixas, HPA por CPU e HPA por métrica customizada.
