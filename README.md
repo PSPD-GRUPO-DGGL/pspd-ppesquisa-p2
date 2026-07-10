@@ -102,6 +102,137 @@ cd chat && make todos
 
 `ANON_SALT` não tem valor padrão e o serviço **falha alto** sem ele. Isso é intencional: o espaço de `id_paciente` é pequeno e conhecido (50 mil valores), então pseudonimizar com salt público é reversível por força bruta em segundos. Ver `docs/matriz-acesso.md` §2.
 
+## Como rodar a Infraestrutura e Observabilidade
+
+Esta seção descreve o ciclo de vida e o provisionamento declarativo do cluster de simulação local (**Kind**), da stack de telemetria e o runbook automatizado para instâncias reais de hipervisores (**Kubeadm/VM**).
+
+### Pré-requisitos de Infraestrutura
+- **Windows Subsystem for Linux (WSL2)** com Docker Desktop ativo.
+- **Git Bash** (ou terminal compatível com Unix).
+- **Controlador de pacotes kubectl** e **Helm v3** instalados.
+- **k6** (executável nativo mapeado no PATH do host).
+- **Multipass** (necessário apenas para a fase de testes em VMs reais).
+
+---
+
+### 1. Inicializando o Cluster Kind Multi-Nó
+
+O desenvolvimento e as simulações usam um cluster Kind local configurado com 1 nó de Control Plane e 3 nós Workers. A porta `30080` do host do Windows é exposta nativamente para a rede interna dos containers do Kind de forma a receber tráfego do k6 sem perdas.
+
+Crie o cluster executando:
+```bash
+kind create cluster --config k8s/infra/kind-config.yaml --name pspd-cluster
+```
+
+Valide se todos os nós estão saudáveis (`Ready`):
+```bash
+kubectl get nodes -o wide
+```
+
+---
+
+### 2. Implantando a Stack de Observabilidade Completa
+
+Utilizamos a `kube-prometheus-stack` via Helm com o receptor de escrita remota ativo para que o k6 envie estatísticas de conexões diretamente ao banco do Prometheus do cluster.
+
+**1. Instale o Helm Chart da stack de monitoramento:**
+```bash
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  -f helm-values/kube-prometheus-stack.yaml
+```
+
+**2. Exponha o Metrics Server (essencial para o funcionamento do HPA):**
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl patch deployment metrics-server -n kube-system --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+```
+
+**3. Instale o Prometheus Adapter de métricas customizadas:**
+```bash
+helm upgrade --install prometheus-adapter prometheus-community/prometheus-adapter \
+  --namespace monitoring \
+  -f helm-values/prometheus-adapter.yaml
+```
+
+---
+
+### 3. Banco de Dados Postgres no Kubernetes
+
+Subimos a persistência do Postgres no namespace padrão e injetamos o seed de 50 mil contatos diretamente no container.
+
+**1. Crie o Postgres:**
+```bash
+kubectl apply -f k8s/infra/postgres.yaml
+```
+
+**2. Copie e aplique as tabelas DDL e os dados DML:**
+```bash
+export DB_POD=$(kubectl get pods -l app=postgres -o jsonpath="{.items[0].metadata.name}")
+kubectl cp db/ "$DB_POD":/tmp/db/
+kubectl exec -it "$DB_POD" -- psql -U pspd_user -d hospital -f /tmp/db/schema/01_schema.sql
+kubectl exec -it "$DB_POD" -- psql -U pspd_user -d hospital -v n_pacientes=50000 -f /tmp/db/seed/02_seed.sql
+kubectl exec -it "$DB_POD" -- psql -U pspd_user -d hospital -f /tmp/db/schema/03_indices.sql
+```
+
+---
+
+### 4. Simulação de Testes de Carga com Bypass de Autenticação
+
+Como o Keycloak e os microsserviços reais dependem das regras do Danilo e do Guilherme, validamos a segurança física da infraestrutura e as métricas do HPA utilizando mocks funcionais e injetando um desvio temporário no script do k6.
+
+**1. Injete os declarativos Dummy e HPA na rede interna:**
+```bash
+kubectl apply -f k8s/app/mocks.yaml
+kubectl apply -f k8s/app/hpa.yaml
+```
+
+**2. Faça o redirecionamento provisório do API Gateway local:**
+```bash
+kubectl port-forward svc/api-gateway 30080:80
+```
+
+**3. Execute as corridas k6 de fora do cluster:**
+A execução coletará as estatísticas e as enviará direto ao Prometheus:
+```bash
+# Executando o cenário de 10 VUs
+k6 run --vus 10 --duration 30s --out json=resultados/cenario_a_10_vus.json k6/cenarios/a_medico_full.js
+
+# Executando a carga limite de 1000 VUs
+k6 run --vus 1000 --duration 1m --out json=resultados/cenario_a_1000_vus.json k6/cenarios/a_medico_full.js
+```
+
+---
+
+### 5. Validando a Descoberta de Métricas Customizadas (Fase d)
+
+O cálculo de escala do HPA baseado em Request Rate segue a relação:
+
+\( replicas = \lceil replicasAtual \times (usoAtual / target) \rceil \)
+
+Para validar que o `prometheus-adapter` está lendo a taxa por segundo da rede e disponibilizando na API de extensões do Kubernetes, execute:
+
+```bash
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1"
+```
+
+> Nota: Este endpoint pode expirar por *timeout* se não houver tráfego computado no cluster. Certifique-se de disparar uma carga simulável do k6 antes de rodar a chamada.
+
+---
+
+### 6. Instalação e provisionamento em VMs Reais (Kubeadm)
+
+A prova de conceito no ambiente nativo simulando múltiplos servidores virtuais é provisionada pelo nosso script declarativo em Bash local.
+
+Prepare as infraestruturas de rede nas instâncias rodando:
+```bash
+chmod +x vms/provision-cluster.sh
+./vms/provision-cluster.sh
+```
+
+Esse script prepara as VMs via Multipass, configura o container runtime `containerd` unificado com cgroups do systemd, desativa swap e deixa o nó principal pronto para o comando `kubeadm init`.
+
 ## Divisão de tarefas
 
 A alocação segue afinidade com o T1 e **grau de dependência**: quem depende de menos gente fica com o que pode ser terminado primeiro.
