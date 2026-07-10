@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prontuário Eletrônico - Hospital Universitário</title>
+    <script src="https://cdn.jsdelivr.net/npm/keycloak-js@21.1.1/dist/keycloak.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        .btn-test { background: #28a745; }
+        pre { background: #333; color: #0f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Sistema de Prontuário (HL7/FHIR)</h2>
+    
+    <div id="login-section">
+        <p>Você não está autenticado.</p>
+        <button onclick="login()">Login via Keycloak</button>
+        <button onclick="mockLogin()" class="btn-test">Login de Teste (Sem Keycloak)</button>
+    </div>
+
+    <div id="app-section" class="hidden">
+        <p>Bem-vindo, <strong id="username"></strong>! Nível: <strong id="user-role"></strong></p>
+        <button onclick="logout()">Sair</button>
+        <hr>
+        
+        <h3>Consultar Paciente</h3>
+        <input type="text" id="patient-id" value="P000001" placeholder="ID do Paciente">
+        <button onclick="fetchPatientData()">Buscar Prontuário</button>
+        
+        <h4>Resposta do API Gateway:</h4>
+        <pre id="json-result">Aguardando requisição...</pre>
+    </div>
+</div>
+
+<script>
+    const keycloak = new Keycloak({
+        url: 'http://localhost:8080',
+        realm: 'hospital',
+        clientId: 'frontend-app'
+    });
+
+    function initKeycloak() {
+        keycloak.init({ onLoad: 'check-sso' }).then(authenticated => {
+            if (authenticated) {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('app-section').classList.remove('hidden');
+                document.getElementById('username').innerText = keycloak.tokenParsed.preferred_username;
+                const roles = keycloak.tokenParsed.realm_access?.roles || [];
+                document.getElementById('user-role').innerText = roles.join(', ');
+            }
+        }).catch(err => console.error("Erro ao inicializar Keycloak", err));
+    }
+
+    function login() { keycloak.login(); }
+    function logout() { keycloak.logout(); }
+
+    // Simula o comportamento do Keycloak para testar a API isoladamente
+    function mockLogin() {
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('app-section').classList.remove('hidden');
+        document.getElementById('username').innerText = "Dev_User (Simulado)";
+        document.getElementById('user-role').innerText = "MEDICO";
+        keycloak.token = "token-falso-para-teste"; 
+    }
+
+    async function fetchPatientData() {
+        const patientId = document.getElementById('patient-id').value;
+        const resultBox = document.getElementById('json-result');
+        resultBox.innerText = "Carregando...";
+
+        try {
+            const response = await fetch(`http://localhost:3000/api/patients/${patientId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${keycloak.token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+            resultBox.innerText = JSON.stringify(data, null, 2);
+            
+        } catch (error) {
+            resultBox.innerText = `Erro na requisição: ${error.message}`;
+        }
+    }
+
+    window.onload = initKeycloak;
+</script>
+
+</body>
+</html>
