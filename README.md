@@ -4,7 +4,23 @@ Aplicação de microsserviços para o Hospital Universitário, com dados clínic
 
 Disciplina PSPD (T02), Prof. Fernando William Cruz — UnB/FGA. Grupo DGGL.
 
-> **Estado atual.** Contratos, banco, especificações, Data Transform Service, chat `epoll` com o experimento C10K e os cenários de carga k6 estão implementados e verificados. Authorization Service, Patient Data Service, API Gateway, frontend e a stack de observabilidade estão especificados e aguardando implementação. Ver [Divisão de tarefas](#divisão-de-tarefas).
+> **Estado atual.** Contratos, banco local de desenvolvimento, especificações, Data Transform Service, chat `epoll` com o experimento C10K e cenários k6 estão implementados. Depois das novas orientações do professor, a entrega final deve rodar no cluster institucional `kiriland`, namespace `grupo-9`, banco `pseudopep_g09`, Keycloak realm `grupo09` e URL `https://kiriland.unb.br/grupo9`. Authorization Service, Patient Data Service, API Gateway, frontend, manifests finais e observabilidade real no Grafana institucional ainda são o caminho crítico.
+
+## Ambiente final da entrega
+
+As orientações novas do professor sobre cluster, banco, Keycloak e Grafana prevalecem sobre instruções antigas deste repositório quando houver conflito.
+
+| Item | Valor |
+|---|---|
+| Cluster | K8S da disciplina em `kiriland.unb.br` |
+| Namespace | `grupo-9` |
+| Kubeconfig | `../kubeconfig-grupo-9.yaml` fora do git |
+| URL pública | `https://kiriland.unb.br/grupo9` |
+| Banco | `pseudopep_g09` |
+| Keycloak | `https://kiriland.unb.br/keycloak`, realm `grupo09` |
+| Grafana | `https://grafana.kiriland.unb.br`, dashboard Grupo 9 |
+
+Segredos não devem ser versionados. Senhas de banco, tokens, kubeconfig, senha SSH e `ANON_SALT` devem entrar via `Secret` ou variável local.
 
 ## Arquitetura
 
@@ -104,7 +120,7 @@ cd chat && make todos
 
 ## Como rodar a Infraestrutura e Observabilidade
 
-Esta seção descreve o ciclo de vida e o provisionamento declarativo do cluster de simulação local (**Kind**), da stack de telemetria e o runbook automatizado para instâncias reais de hipervisores (**Kubeadm/VM**).
+Esta seção descreve o laboratório local. Ela é útil para desenvolvimento, mas não substitui o deploy final no cluster institucional do professor.
 
 ### Pré-requisitos de Infraestrutura
 - **Windows Subsystem for Linux (WSL2)** com Docker Desktop ativo.
@@ -117,7 +133,7 @@ Esta seção descreve o ciclo de vida e o provisionamento declarativo do cluster
 
 ### 1. Inicializando o Cluster Kind Multi-Nó
 
-O desenvolvimento e as simulações usam um cluster Kind local configurado com 1 nó de Control Plane e 3 nós Workers. A porta `30080` do host do Windows é exposta nativamente para a rede interna dos containers do Kind de forma a receber tráfego do k6 sem perdas.
+O desenvolvimento local pode usar um cluster Kind configurado com 1 nó de Control Plane e 3 nós Workers. A porta `30080` do host é exposta para receber tráfego do k6. Para resultados finais, usar `https://kiriland.unb.br/grupo9`.
 
 Crie o cluster executando:
 ```bash
@@ -158,9 +174,9 @@ helm upgrade --install prometheus-adapter prometheus-community/prometheus-adapte
 
 ---
 
-### 3. Banco de Dados Postgres no Kubernetes
+### 3. Banco de Dados Postgres local
 
-Subimos a persistência do Postgres no namespace padrão e injetamos o seed de 50 mil contatos diretamente no container.
+Este Postgres é apenas para desenvolvimento local. No cluster final, usar o banco institucional `pseudopep_g09` fornecido pelo professor, com credenciais em `Secret`.
 
 **1. Crie o Postgres:**
 ```bash
@@ -180,7 +196,7 @@ kubectl exec -it "$DB_POD" -- psql -U pspd_user -d hospital -f /tmp/db/schema/03
 
 ### 4. Simulação de Testes de Carga com Bypass de Autenticação
 
-Como o Keycloak e os microsserviços reais dependem das regras do Danilo e do Guilherme, validamos a segurança física da infraestrutura e as métricas do HPA utilizando mocks funcionais e injetando um desvio temporário no script do k6.
+Como Auth, Data, Gateway e Frontend reais ainda estão pendentes, os mocks servem só para ensaiar HPA/infra. Eles não contam como validação funcional final.
 
 **1. Injete os declarativos Dummy e HPA na rede interna:**
 ```bash
@@ -240,11 +256,11 @@ A alocação segue afinidade com o T1 e **grau de dependência**: quem depende d
 | Integrante | Responsabilidade | Estado |
 |---|---|---|
 | **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · estrutura do relatório | ✅ tudo entregue, exceto o relatório |
-| **Danilo Carvalho Antunes** | Keycloak (realm como código, JWKS) · **Authorization Service** · **Patient Data Service** · experimento pgbouncer | ⬜ especificado |
-| **Guilherme Brito de Souza** | **API Gateway** (validação JWKS, orquestração, `prom-client`) · frontend · validação funcional ponta a ponta · OpenTelemetry | ⬜ especificado |
-| **Luiz Gustavo Lopes Campos** | Cluster **kind** de 4 nós + **kubeadm/VM** · `kube-prometheus-stack`, Grafana, SLO · HPA (CPU + customizado) · execução das corridas de carga e resiliência · consolidação do relatório e vídeo | ⬜ especificado |
+| **Danilo Carvalho Antunes** | Introspecção do banco institucional · **Authorization Service** · **Patient Data Service** · configuração segura de banco · experimento pgbouncer depois do caminho real | ⬜ especificado em `docs/plano-implementacao-danilo.md` |
+| **Guilherme Brito de Souza** | **API Gateway** validando JWKS do realm `grupo09` · orquestração `Auth -> Data -> Transform` · frontend OIDC · validação funcional ponta a ponta · OpenTelemetry | ⬜ especificado |
+| **Luiz Gustavo Lopes Campos** | Manifests finais para `grupo-9` · deploy em `kiriland` · Grafana institucional · HPA · execução k6 contra `/grupo9` · resiliência · consolidação do relatório/vídeo | 🟡 laboratório local pronto; final pendente |
 
-O plano completo, com orçamento de RAM, cenários de carga, riscos conhecidos e critérios de verificação, está em `docs/PLANO.md`.
+O plano completo, com a atualização normativa do cluster institucional, está em `docs/PLANO.md`. O plano da parte do Danilo está em `docs/plano-implementacao-danilo.md`.
 
 ### Para quem vai implementar um serviço
 
@@ -254,11 +270,13 @@ Os contratos em `proto/` são a fonte de verdade e já compilam. Gere seus stubs
 2. **O Authorization Service não devolve dado clínico.** Devolve uma decisão e a lista de `ids_autorizados`. O Gateway não pode pedir ao Data mais do que o Auth autorizou.
 3. **O Transform ecoa `nivel_aplicado` de volta.** Redundante de propósito: permite ao Gateway assertar que o nível pedido foi o honrado, e vira teste.
 
+Para pesquisador, há dois caminhos diferentes no `PatientDataService`: `AgregarCoorte` produz `ResultadoAgregado` para `AGGREGATED`; `BuscarCoorte` produz dados crus da coorte para o Transform aplicar `ANONYMIZED`.
+
 Convenções herdadas do T1: proto3 com `keepCase`, nomes em pt-BR, Conventional Commits em português, stubs `*_pb2*.py` fora do git, fim de linha LF.
 
 ## Ambiente
 
-Todo o desenvolvimento e as medições assumem um único host: Intel i7-1255U (12 threads), 16 GB de RAM. O orçamento de memória do cluster completo está em `docs/PLANO.md` e é a restrição que governa as decisões de infraestrutura — inclusive a de rodar o k6 **fora** do cluster, para não contaminar as métricas dos pods sendo medidos.
+O laboratório local assume um único host: Intel i7-1255U (12 threads), 16 GB de RAM. A medição final deve priorizar o cluster institucional do professor, que já possui 4 nós, Prometheus/Grafana e quotas por grupo.
 
 ## Referências
 

@@ -11,7 +11,7 @@
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Trend } from 'k6/metrics';
-import { GATEWAY, DEGRAUS, cabecalhos, conferirBundle, obterToken } from '../comum.js';
+import { GATEWAY, DEGRAUS, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
 
 export const options = {
   scenarios: { c_pesquisador_anonymized: DEGRAUS },
@@ -34,7 +34,7 @@ export function setup() {
 
 export default function (dados) {
   const limite = LOTES[Math.floor(Math.random() * LOTES.length)];
-  const url = `${GATEWAY}/api/coortes/exames?projeto=PRJ01&condicao=Diabetes&limite=${limite}`;
+  const url = `${GATEWAY}/api/coortes/exames?projeto=${PROJETO_COORTE}&condicao=${CONDICAO_COORTE}&limite=${limite}`;
   const r = http.get(url, cabecalhos(dados.token, 'C_pesquisador_anonymized'));
 
   if (conferirBundle(r, 'Bundle')) {

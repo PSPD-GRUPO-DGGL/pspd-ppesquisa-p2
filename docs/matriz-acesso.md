@@ -4,6 +4,24 @@ Documento normativo. O `AuthService` decide **qual** nível se aplica; o `DataTr
 
 Base: enunciado, seção 2.1 e descrição do Authorization Service.
 
+## 0. Ambiente final e usuários
+
+Na versão final, o login não usa o realm local antigo `hospital`. A autenticação deve usar o Keycloak institucional:
+
+```text
+https://kiriland.unb.br/keycloak/realms/grupo09
+```
+
+Usuários informados pelo professor:
+
+| Perfil | Usuários |
+|---|---|
+| MEDICO | `med.cardoso`, `med.lima`, `med.almeida`, `med.rocha`, `med.monteiro` |
+| ESTAGIARIO | `est.ferreira`, `est.gomes`, `est.costa`, `est.melo`, `est.dias` |
+| PESQUISADOR | `pes.mendes`, `pes.araujo`, `pes.silveira` |
+
+As regras abaixo são normativas. Os casos concretos com `id_paciente` e `id_projeto` precisam ser recalibrados depois da introspecção do banco institucional `pseudopep_g09`, porque os exemplos do seed local usam alguns usuários de desenvolvimento que podem não existir no Keycloak final.
+
 ## 1. Decisão: quem recebe qual nível
 
 O `AuthService` recebe `username`, `role` e `escopo` do JWT já validado, e devolve `ALLOW + nível` ou `DENY + motivo`.
@@ -42,7 +60,7 @@ Passando os quatro, o nível depende do escopo:
 | `ExamesCoorte` | `ANONYMIZED` |
 | `MeusProjetos` | `ALLOW` sem dado clínico (lista de projetos do próprio usuário) |
 
-O seed tem os quatro desfechos: `PRJ01` aprovado e vigente (ALLOW), `PRJ02` expirado, `PRJ03` suspenso, `PRJ04` aprovado mas de `pes.almeida` (DENY por dono quando pedido por `pes.souza`).
+O seed local tem os quatro desfechos: `PRJ01` aprovado e vigente (ALLOW), `PRJ02` expirado, `PRJ03` suspenso, `PRJ04` aprovado mas de outro pesquisador (DENY por dono). No banco institucional, Danilo deve identificar projetos equivalentes para os usuários finais (`pes.mendes`, `pes.araujo`, `pes.silveira`) e atualizar a matriz de teste.
 
 ## 2. Projeção: o que cada nível deixa passar
 
@@ -88,11 +106,15 @@ Serve ao `PatientDataService`: qual `FiltroPacientes` cada escopo produz.
 | `Medicamentos` | não | sim | `Medicacao` | sem limite |
 | `ResumoCoorte` | — | — | — | agregação |
 | `EstatisticasCoorte` | — | — | — | agregação |
-| `ExamesCoorte` | não | sim | `Observacao` | por paciente da coorte |
+| `ExamesCoorte` | sim | sim | `Observacao` | por paciente da coorte |
+
+No contrato gRPC, `ExamesCoorte` usa `PatientDataService.BuscarCoorte(FiltroCoorte) -> ConjuntoDadosClinicos`; `ResumoCoorte` e `EstatisticasCoorte` usam `AgregarCoorte(FiltroCoorte) -> ResultadoAgregado`.
 
 ## 4. Matriz de teste
 
 Cada linha é um caso do `scripts/validacao_funcional.sh` e uma linha da tabela de resultados do relatório.
+
+**Estado atual:** a tabela abaixo ainda é a matriz lógica baseada no seed local. Antes da entrega, substituir os casos que usam usuários/projetos inexistentes no Keycloak institucional por equivalentes encontrados no `pseudopep_g09`. A estrutura esperada dos 15 casos não muda.
 
 | # | usuário | role | escopo | alvo | esperado |
 |---|---|---|---|---|---|
@@ -100,14 +122,14 @@ Cada linha é um caso do `scripts/validacao_funcional.sh` e uma linha da tabela 
 | 2 | `med.cardoso` | MEDICO | ResumoClinico | `P049000` (sem vínculo) | 403, `sem_vinculo_ativo` |
 | 3 | `med.cardoso` | MEDICO | ResumoClinico | `P050000` (vínculo Inativo) | 403, `sem_vinculo_ativo` |
 | 4 | `med.silva` | MEDICO | ResumoClinico | `P000002` (é do cardoso) | 403, `sem_vinculo_ativo` |
-| 5 | `est.pereira` | ESTAGIARIO | ResumoClinico | `P000002` (supervisionado) | 200, PARTIAL, nome `X.Y.Z.`, sem CPF |
-| 6 | `est.pereira` | ESTAGIARIO | ResumoClinico | `P001500` (fora da supervisão) | 403, `sem_supervisao_ativa` |
-| 7 | `pes.souza` | PESQUISADOR | EstatisticasCoorte | PRJ01 / Diabetes | 200, AGGREGATED, `MeasureReport`, zero identificadores |
-| 8 | `pes.souza` | PESQUISADOR | ExamesCoorte | PRJ01 / Diabetes | 200, ANONYMIZED, pseudônimos, sem nome/CPF |
-| 9 | `pes.souza` | PESQUISADOR | EstatisticasCoorte | PRJ02 / Hipertensao | 403, `projeto_expirado` |
-| 10 | `pes.souza` | PESQUISADOR | EstatisticasCoorte | PRJ03 / Obesidade | 403, `projeto_nao_aprovado` |
-| 11 | `pes.souza` | PESQUISADOR | EstatisticasCoorte | PRJ04 / Pneumonia | 403, `projeto_de_outro_pesquisador` |
-| 12 | `pes.souza` | PESQUISADOR | EstatisticasCoorte | PRJ01 / Asma | 403, `condicao_fora_do_projeto` |
+| 5 | estagiário institucional a definir | ESTAGIARIO | ResumoClinico | paciente supervisionado | 200, PARTIAL, nome `X.Y.Z.`, sem CPF |
+| 6 | estagiário institucional a definir | ESTAGIARIO | ResumoClinico | paciente fora da supervisão | 403, `sem_supervisao_ativa` |
+| 7 | pesquisador institucional a definir | PESQUISADOR | EstatisticasCoorte | projeto aprovado / condição do projeto | 200, AGGREGATED, `MeasureReport`, zero identificadores |
+| 8 | pesquisador institucional a definir | PESQUISADOR | ExamesCoorte | projeto aprovado / condição do projeto | 200, ANONYMIZED, pseudônimos, sem nome/CPF |
+| 9 | pesquisador institucional a definir | PESQUISADOR | EstatisticasCoorte | projeto expirado | 403, `projeto_expirado` |
+| 10 | pesquisador institucional a definir | PESQUISADOR | EstatisticasCoorte | projeto suspenso/não aprovado | 403, `projeto_nao_aprovado` |
+| 11 | pesquisador institucional a definir | PESQUISADOR | EstatisticasCoorte | projeto de outro pesquisador | 403, `projeto_de_outro_pesquisador` |
+| 12 | pesquisador institucional a definir | PESQUISADOR | EstatisticasCoorte | projeto aprovado / condição fora do projeto | 403, `condicao_fora_do_projeto` |
 | 13 | — | — | ResumoClinico | token ausente | 401 |
 | 14 | — | — | ResumoClinico | token com assinatura inválida | 401 |
 | 15 | `med.cardoso` | MEDICO | ResumoClinico | token expirado | 401 |

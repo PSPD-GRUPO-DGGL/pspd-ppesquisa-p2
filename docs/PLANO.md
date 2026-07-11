@@ -18,7 +18,52 @@ Repositório: `git@github.com:PSPD-GRUPO-DGGL/pspd-ppesquisa-p2.git` (local em `
 
 ---
 
+## Atualização normativa — cluster da disciplina
+
+As orientações novas do professor sobre o cluster K8S, o arquivo `kubeconfig-grupo-9.yaml` e a errata do Keycloak passam a ser a fonte normativa mais alta para a versão final do projeto. O PDF principal continua valendo para requisitos funcionais, arquitetura, fases de experimento e relatório; quando houver conflito operacional, prevalecem as orientações mais recentes do cluster.
+
+**Alvo final obrigatório do grupo 09:**
+
+| Item | Valor final |
+|---|---|
+| Cluster | `kiriland.unb.br`, cluster K8S da disciplina com 4 nós |
+| Namespace | `grupo-9` |
+| Kubeconfig | `../kubeconfig-grupo-9.yaml`, fora do repositório |
+| URL pública da aplicação | `https://kiriland.unb.br/grupo9` |
+| Banco institucional | `pseudopep_g09` |
+| Usuário do banco | fornecido pelo professor para o grupo 09; guardar em `Secret`, nunca no git |
+| Host do banco visto a partir da VM/cluster | `192.168.122.1` |
+| Keycloak | `https://kiriland.unb.br/keycloak` |
+| Realm | `grupo09` |
+| Conta Grafana | dashboard do Grupo 9 em `https://grafana.kiriland.unb.br` |
+
+Consequência prática: `kind`, Postgres local, Keycloak local e VMs kubeadm continuam úteis como laboratório de desenvolvimento, comparação e plano B, mas **não são o caminho principal de entrega**. A entrega final deve demonstrar a aplicação real no namespace `grupo-9`, usando o banco e o Keycloak institucionais.
+
+### Hierarquia de fontes
+
+1. Notícias/erratas do professor sobre cluster, Keycloak, banco e apresentação.
+2. `orientacoes_sobre_clusterK8S.pdf` e `kubeconfig-grupo-9.yaml`.
+3. `PSPD2026.1_PPesq.pdf`, para arquitetura, requisitos da aplicação, fases e relatório.
+4. Decisões internas do grupo, desde que não contrariem os itens acima.
+
+### Pendências críticas atualizadas
+
+- [ ] Auth Service real contra o banco institucional.
+- [ ] Patient Data Service real contra o banco institucional.
+- [ ] Gateway chamando `Auth -> Data -> Transform`.
+- [ ] Frontend usando Keycloak institucional (`realm=grupo09`).
+- [ ] Manifests finais para `grupo-9`, com `requests` e `limits` em todos os pods.
+- [ ] `Secret`/configuração segura para banco, `ANON_SALT` e parâmetros OIDC.
+- [ ] Validação funcional real dos 15 casos da matriz.
+- [ ] k6 contra `https://kiriland.unb.br/grupo9`, com tokens do Keycloak institucional.
+- [ ] `/metrics` nos serviços reais, não apenas mocks.
+- [ ] Grafana do grupo 09 com painéis das fases b/c/d/e.
+
+---
+
 ## Ambiente e orçamento de RAM
+
+Esta seção descreve o laboratório local. Ela não substitui o alvo final `kiriland/grupo-9`.
 
 Laptop i7-1255U (2 P-cores + 8 E-cores, 12 threads), 16 GB de RAM com **9,6 GB disponíveis** e 19,7 GB de swap, dos quais 15,3 GB in **zram** (compressão em memória). O zram é a rede de segurança contra OOMKill nos picos e permite ser ambicioso com a stack de observabilidade.
 
@@ -29,7 +74,7 @@ Laptop i7-1255U (2 P-cores + 8 E-cores, 12 threads), 16 GB de RAM com **9,6 GB d
 | kind control-plane (etcd, apiserver, ctrl-mgr, sched, kubelet) | 700 | ✅ Ativo e respondendo |
 | 3 workers (kubelet, containerd, kube-proxy, kindnet) | 600 | ✅ Ativos e integrados |
 | Postgres + pgbouncer + postgres_exporter | 410 | ✅ Ativo e seed indexado |
-| Keycloak (`start-dev`, H2 embutido) | 800 | ⬜ Pendente (Danilo) |
+| Keycloak local (`start-dev`, H2 embutido) | 800 | opcional para laboratório; final usa Keycloak institucional |
 | prometheus-operator + Prometheus (retention 12h) + Alertmanager | 860 | ✅ Ativo em `monitoring` |
 | Grafana + kube-state-metrics + node-exporter ×4 | 400 | ✅ Ativo e exposto no browser |
 | metrics-server + prometheus-adapter + Dashboard | 280 | ✅ APIServices integrados |
@@ -45,15 +90,17 @@ Isso é apretado — e a solução não é um hack, é **rigor metodológico**. 
 
 ## Decisões de projeto
 
-**Cluster de trabalho: `kind` com 4 nós** (1 control-plane + 3 workers). O kind usa kubeadm por baixo, os passos de bootstrap são as mesmas primitivas, e ele é estável o bastante para não morrer durante a demonstração in loco. ✅ **[CONCLUÍDO E ATIVO]**
+**Cluster final: `kiriland`, namespace `grupo-9`.** É o ambiente disponibilizado pelo professor para a versão final. Já vem com 4 nós, Prometheus/Grafana e quotas separadas por grupo. A aplicação deve ser acessível por `https://kiriland.unb.br/grupo9`, com manifests contendo `requests` e `limits`. ⬜ **[PENDENTE: manifests finais e deploy real]**
 
-**Cluster de validação: `kubeadm` real em VMs.** Não é um apêndice documental — é entregável. Scripts de provisionamento (multipass) commitados, cluster de 1 master + 3 workers levantado de fato, aplicação implantada e validada funcionalmente nele. As **medições** ficam no kind, porque as VMs mais a stack de observabilidade completa não cabem simultaneamente em 16 GB, e medir num ambiente que está swappando produziria números sem sentido. Essa separação — cluster real para provar o runbook, cluster reprodutível para medir — é uma escolha metodológica defensável e vai explicada. ✅ **[CONCLUÍDO EM `vms/provision-cluster.sh`]**
+**Cluster de trabalho local: `kind` com 4 nós** (1 control-plane + 3 workers). O kind usa kubeadm por baixo e continua útil para desenvolvimento, testes rápidos e reprodução fora da infraestrutura da disciplina. ✅ **[CONCLUÍDO E ATIVO COMO LABORATÓRIO]**
 
-**Keycloak de verdade**, não emissor JWT caseiro. É o servidor que o enunciado nomeia. Roda em `start-dev` com H2 embutido (~800 MB, cabe). O realm é definido em `keycloak/realm-hospital.json`, importado no boot via `--import-realm` e **commitado no repositório** — configuração como código, reproduzível, sem cliques. ⬜ **[AGUARDANDO REALM DO DANILO]**
+**Cluster kubeadm em VMs.** Continua documentado como evidência de compreensão dos mecanismos de montagem de cluster, exigidos pelo PDF principal. Depois da disponibilização do cluster `kiriland`, ele deixa de ser o ambiente prioritário de entrega. ✅ **[CONCLUÍDO EM `vms/provision-cluster.sh`, USO SECUNDÁRIO]**
 
-**Banco local com dados sintéticos.** O professor mencionou fornecer um banco, mas não temos acesso. Geramos as 5 tabelas do enunciado com um seed volumoso o suficiente para que as agregações de coorte custem CPU de verdade — na casa de 50k pacientes e alguns milhões de `clinical_events`, com índices deliberadamente projetados para que o caminho FULL seja barato e o AGGREGATED seja caro. ✅ **[CONCLUÍDO, TABELAS E SEED INJETADOS]**
+**Keycloak institucional**, não emissor JWT caseiro. O fluxo final deve usar `https://kiriland.unb.br/keycloak/realms/grupo09`, conforme errata. Um Keycloak local pode existir só para desenvolvimento offline; não é requisito da parte do Danilo na entrega final. ⬜ **[PENDENTE: Gateway/Frontend validar tokens do realm `grupo09`]**
 
-**k6 roda FORA do cluster**, binário nativo no host, batendo no NodePort do gateway via `extraPortMappings`. Um pod k6 agendado num worker roubaria CPU exatamente dos pods sendo medidos. Limitação residual, a registrar com honestidade: k6 e kind dividem os mesmos 12 threads do laptop, então há contenção inevitável em single-host — mitigada mantendo `nice` e baseline idênticos entre execuções. ✅ **[CONCLUÍDO - OPERANDO EXTERNO]**
+**Banco institucional por grupo.** O professor forneceu um Postgres por grupo; para o grupo 09, o banco final é `pseudopep_g09`. A primeira tarefa do Danilo é introspectar esse banco e ajustar o `AuthService`/`PatientDataService` ao schema real. O seed local permanece como massa sintética de desenvolvimento e comparação, não como fonte final de verdade. ⬜ **[PENDENTE: introspecção e SQL contra `pseudopep_g09`]**
+
+**k6 roda fora dos pods da aplicação.** No ambiente final, preferir a ferramenta k6 instalada na VM da disciplina ou um cliente externo batendo em `https://kiriland.unb.br/grupo9`. No laboratório local, continua válido bater no NodePort do gateway via `extraPortMappings`. ✅ **[SCRIPTS EXISTEM; PENDENTE APONTAR PARA O AMBIENTE FINAL]**
 
 **Stack:** Gateway Node.js/Express (reuso do T1), três serviços em Python/grpcio, serviço de chat em C. Python satura ~1 core por pod sob o GIL, e isso é *desejável*: torna o HPA e o teto de escalabilidade visíveis e analisáveis. 🟡 **[TRANSFORM E CHAT EM C EM EXECUÇÃO ✅ / SKELETON GERAL DO GATEWAY E DO DADOS ⬜]**
 
@@ -64,13 +111,16 @@ Isso é apretado — e a solução não é um hack, é **rigor metodológico**. 
 Os requisitos explícitos do enunciado. Nada da Camada 2 começa antes disto fechar.
 
 **Infraestrutura.**
-- [x] Cluster kind de 4 nós com `extraPortMappings` ✅
-- [x] metrics-server ativo e com patch de bypass TLS aplicado ✅
-- [x] Dashboards de telemetria configurados e ativos ✅
-- [x] Postgres com dados DML importados e saudáveis ✅
+- [x] Cluster kind de 4 nós com `extraPortMappings` ✅ (laboratório)
+- [ ] Deploy final no namespace `grupo-9` do cluster `kiriland` ⬜
+- [ ] Manifests finais com `requests`/`limits` em todos os containers ⬜
+- [ ] Grafana institucional do Grupo 9 configurado com painéis da aplicação ⬜
+- [ ] Conexão ao Postgres institucional `pseudopep_g09` via `Secret` ⬜
 
 **Aplicação.**
-- [ ] Login Keycloak real acoplado ao fluxo ⬜ (Aguardando Danilo)
+- [ ] Login Keycloak institucional acoplado ao fluxo ⬜ (Guilherme/Gateway + Frontend)
+- [ ] Auth Service real ⬜ (Danilo)
+- [ ] Patient Data Service real ⬜ (Danilo)
 - [x] Bypass de Token e ambiente mockado de teste de estresse criado ✅ (Desenvolvido por Luiz)
 - [x] Data Transform Service codificado, encapsulado e testado ✅ (Gabriel)
 
@@ -78,11 +128,11 @@ Os requisitos explícitos do enunciado. Nada da Camada 2 começa antes disto fec
 - [ ] Painel do usuário integrando os três perfis de acesso dinâmico ⬜ (Guilherme)
 
 **As cinco fases.**
-- [x] (a) validação funcional com 1 réplica ✅ (Simulado via bypass e mocks) / Real ⬜
-- [x] (b) testes de carga k6 em 10/50/100/500/1000 VUs com ≥4 métricas ✅ (Coletados e salvos em `resultados/`)
-- [x] (c) escalabilidade horizontal 1→3 réplicas com análise de ganho, utilização dos nós, distribuição dos pods e impacto no banco ✅ (Estrutura e limites de CPU/Mem instalados)
-- [x] (d) HPA demonstrando criação automática de pods, redistribuição de carga, redução de latência e limite de escalabilidade ✅ (Autoscaling de pods por consumo de CPU operando)
-- [x] (e) observabilidade com ≥5 métricas em Prometheus e Grafana ✅ (Ativo e coletando)
+- [ ] (a) validação funcional real com 1 réplica de cada microserviço ⬜
+- [ ] (b) testes de carga k6 em 10/50/100/500/1000 VUs contra `https://kiriland.unb.br/grupo9` ⬜
+- [ ] (c) escalabilidade horizontal 1→3 réplicas com impacto no banco institucional ⬜
+- [ ] (d) HPA demonstrando criação automática de pods, redistribuição de carga, redução de latência e limite de escalabilidade ⬜
+- [ ] (e) observabilidade com ≥5 métricas reais em Prometheus/Grafana institucional ⬜
 
 **Entregáveis.**
 - [ ] Relatório com todas as seções exigidas, incluindo a subseção individual de cada membro com autoavaliação ⬜ (Rascunhando capítulos em `docs/relatorio-final.md`)
@@ -260,14 +310,14 @@ O critério que organiza a lista: quem depende de menos gente fica com o que pod
 4. **Scripts k6 dos cenários A/B/C/D**: escritos contra os contratos; o Luiz executa quando o cluster estiver de pé. ✅ entregue
 5. **Estrutura do relatório** e todas as seções que não dependem de resultado (introdução, metodologia, arquitetura, Transform, FHIR/anonimização, chat/C10K, referências), com as tabelas de resultado como esqueleto a preencher. 🟡 (Redigindo parágrafos iniciais)
 
-**Danilo** (protos e teoria gRPC no T1) — **Keycloak** (realm como código em `keycloak/realm-hospital.json`, três roles, usuários de teste, RS256, JWKS), **Authorization Service** (regras de `docs/matriz-acesso.md` §1 sobre `user_patient_assignments` e `projects`), **Patient Data Service** (SQL e agregações) e o **experimento pgbouncer** (medir a saturação do pool, instalar o pgbouncer, medir de novo). ⬜
-> Auth e Data são os dois serviços que falam SQL e leem as mesmas cinco tabelas — quem escreve as regras já tem o schema na cabeça. Contratos em `proto/auth.proto` e `proto/data.proto`. Escopo→filtro em `docs/matriz-acesso.md` §3. Consultas de referência validadas com `EXPLAIN ANALYZE`.
+**Danilo** (protos e teoria gRPC no T1) — **introspecção do banco institucional `pseudopep_g09`**, **Authorization Service** (regras de `docs/matriz-acesso.md` §1 sobre `user_patient_assignments` e `projects`), **Patient Data Service** (SQL e agregações), manifests/variáveis de conexão segura para esses dois serviços e, só depois do caminho real funcionar, **experimento pgbouncer** (medir saturação do pool, instalar pgbouncer, medir de novo). ⬜
+> Auth e Data são os dois serviços que falam SQL e leem as mesmas cinco tabelas — quem escreve as regras já tem o schema na cabeça. Contratos em `proto/auth.proto` e `proto/data.proto`. Escopo→filtro em `docs/matriz-acesso.md` §3. Consultas de referência devem ser validadas primeiro contra o banco institucional. O Keycloak final é institucional (`realm=grupo09`); Danilo não precisa criar um realm local como entrega final, apenas consumir `username` e `role` já validados pelo Gateway.
 
 **Guilherme** (Gateway P no T1) — **API Gateway** (validação de JWT contra o JWKS, orquestração do pipeline sequencial, `prom-client`), **frontend** (login OIDC e tela de consulta por perfil), **validação funcional ponta a ponta** (`scripts/validacao_funcional.sh` contra as 15 linhas della matriz de teste, que é a fase *a*) e **OpenTelemetry** (propagação de contexto pelos metadados gRPC). ⬜
-> Frontend e Gateway são os dois lados da mesma conversa REST — a fronteira HTTP inteira num dono só.
+> Frontend e Gateway são os dois lados da mesma conversa REST — a fronteira HTTP inteira num dono só. Atenção: JWKS, issuer e endpoint de token finais vêm do Keycloak `https://kiriland.unb.br/keycloak/realms/grupo09`, não do realm local `hospital`.
 
-**Luiz** (Docker/K8s no T1) — **cluster kind** de 4 nós e **cluster kubeadm em VMs**, `kube-prometheus-stack` com Grafana provisionado, SLO e alerta, **HPA** (por CPU e customizado via `prometheus-adapter`), metrics-server, Dashboard, Jaeger e Loki, **execução das corridas de carga** e experimentos de **resiliência**, mais a **consolidação final do relatório e do vídeo**. ✅ (Toda infraestrutura, métricas customizadas, mocks de testes, bypass k6 e scripts vm provisionados e funcionais!)
-> `servicos/transform/Dockerfile` serve de molde: build a partir da raiz, stubs gerados no build, imagem não-root. Perfis de `requests`/`limits` já definidos neste plano.
+**Luiz** (Docker/K8s no T1) — manter o laboratório `kind`, mas agora priorizar **manifests finais para `grupo-9`**, integração com Prometheus/Grafana institucionais, HPA no cluster da disciplina, exposição pública em `https://kiriland.unb.br/grupo9`, execução das corridas k6 reais e experimentos de resiliência, mais consolidação final do relatório e vídeo. 🟡
+> `servicos/transform/Dockerfile` serve de molde: build a partir da raiz, stubs gerados no build, imagem não-root. Todos os Deployments finais precisam de `resources.requests` e `resources.limits`, porque o professor chamou isso explicitamente nas orientações do cluster.
 
 **Transversal, de todos:** instrumentar OpenTelemetry no próprio serviço, e gravar o próprio trecho de vídeo.
 
@@ -277,16 +327,17 @@ Relatório e vídeo correm em paralelo desde que o pipeline local esteja de pé,
 
 ## Ordem de execução
 
-1. ✅ **Sprint 0.** Contratos, schema, seed, matriz de acesso, mapeamento FHIR — entregues por Gabriel. Falta o kind de pé (Luiz). ✅ (Kind, rede e monitoramento de pé)
-2. **Serviços restantes contra os stubs.** Danilo faz Keycloak + Auth + Data; Guilherme faz Gateway + frontend. O Transform já responde. ⬜
-3. **Pipeline local** via docker-compose, ponta a ponta com os três perfis, os quatro níveis e os DENY. Aqui a fase (a) está cumprida. Validar com `scripts/validacao_funcional.sh` contra as 15 linhas da matriz de teste. ⬜
-4. **Migrar para o kind.** Build → `kind load` → `apply`, já com `requests`/`limits` e probes desde o primeiro manifesto. ✅ (Processo de imagens mockadas e Transform oficial operando)
-5. **Instrumentação.** `prom-client` no gateway, interceptor nos serviços Python (molde em `servicos/transform/metricas.py`), postgres_exporter, ServiceMonitors, `kube-prometheus-stack`, dashboards provisionados, SLO e alerta. ✅ (Métricas customizadas e Prometheus Operator integrados)
-6. **Fases b → c → d.** k6 de fora, 10→1000; escala manual 1→3; HPA por CPU. Os cenários A/B/C/D já estão escritos em `k6/cenarios/`; Luiz os executa. ✅ (Bateria k6 realizada com sucesso sob o bypass de gateway)
-7. **Camada 3.** OTel + Jaeger + Loki; `prometheus-adapter` e o HPA por latência com o comparativo; pgbouncer com medição antes/depois; experimentos de resiliência. 🟡 (Jaeger, adaptador de métricas customizadas e experimentos de resiliência/chaos de pods e nós concluídos ✅ / Outros microsserviços ⬜)
-8. ✅ **Chat epoll e experimento C10K** — entregues por Gabriel, independentes do resto. Resta a Guilherme integrá-lo atrás do Gateway. ✅
-9. **Cluster kubeadm em VMs**, validação funcional da aplicação nele. ✅ (Script de provisionamento automatizado concluído por Luiz em `vms/`)
-10. **Cauda paralela.** Relatório e vídeos desde o passo 3. 🟡 (Relatório técnico rascunhado por Luiz e Gabriel)
+1. ✅ **Sprint 0.** Contratos, schema local, seed local, matriz de acesso, mapeamento FHIR, Transform e chat `epoll`.
+2. **Congelar ambiente final.** Todos adotam `kiriland`, namespace `grupo-9`, banco `pseudopep_g09`, Keycloak `grupo09`, URL `https://kiriland.unb.br/grupo9`. ✅ (documentado nesta revisão)
+3. **Introspecção do banco institucional.** Danilo lista tabelas, colunas, índices e amostras do `pseudopep_g09`, comparando com `db/schema/01_schema.sql`. Sem isso, o SQL do Data Service é chute. ⬜
+4. **Serviços reais.** Danilo implementa Auth + Data contra o banco institucional; Guilherme implementa Gateway + Frontend contra o Keycloak institucional. Transform já responde. ⬜
+5. **Smoke tests gRPC isolados.** Auth e Data devem passar antes de entrar no Gateway. Validar decisões ALLOW/DENY, filtros por escopo e agregações. ⬜
+6. **Pipeline ponta a ponta local ou em namespace de teste.** Gateway chama `Auth -> Data -> Transform`; validação funcional dos 15 casos. Aqui a fase (a) fica realmente cumprida. ⬜
+7. **Deploy final em `grupo-9`.** Manifests com `requests`/`limits`, `Secret` de banco, `ANON_SALT`, Services e exposição pela rota pública `/grupo9`. ⬜
+8. **Observabilidade real.** `/metrics` no Gateway/Auth/Data/Transform, scrape pelo Prometheus institucional, painéis do Grupo 9 no Grafana. ⬜
+9. **Fases b/c/d no cluster da disciplina.** k6 contra `https://kiriland.unb.br/grupo9`, escala manual 1→3, HPA, análise de limites e impacto no banco. ⬜
+10. **Camada 3.** OTel/Jaeger/Loki, HPA por métrica customizada, pgbouncer e resiliência ficam depois do caminho crítico real. 🟡
+11. **Relatório e vídeos.** Atualizar resultados, limitações, contribuição individual e autoavaliação desde o passo 6. 🟡
 
 ---
 
@@ -303,7 +354,10 @@ Estes são erros que vão acontecer, não hipóteses:
 - **`exp` curto no JWT** derruba a carga com 401 no meio do teste de 1000 VUs. Expiração generosa nos tokens de teste, e o k6 renovando token quando necessário. ⬜ (Bypass ativo temporariamente nos mocks)
 - **Scale-down do HPA demora ~5 minutos** por padrão (janela de estabilização). Ajustar `behavior.scaleDown` ou avisar na narração do vídeo. ⬜
 - **`epoll` edge-triggered com socket bloqueante é um bug clássico**: é obrigatório `O_NONBLOCK` e drenar o `read()` até `EAGAIN`, senão eventos se perdem silenciosamente e o chat trava sob carga. ✅ (Prevenido pelo algoritmo de rede do Gabriel)
-- **Keycloak em `start-dev` com H2** perde estado ao reiniciar o pod. Com `--import-realm` e realm commitado isso é irrelevante, mas os usuários criados na mão somem — daí a insistência em configuração como código. ⬜
+- **Confundir realm local `hospital` com realm final `grupo09`** produz token com `issuer` errado e o Gateway deve recusar. Todos os scripts finais precisam permitir `KEYCLOAK=https://kiriland.unb.br/keycloak` e `REALM=grupo09`. ⬜
+- **Usar usuários do seed local nos testes finais** pode falhar porque o Keycloak institucional lista usuários diferentes dos rascunhos antigos. A matriz final deve ser ajustada depois da introspecção do banco e dos tokens reais. ⬜
+- **Manifests com `namespace: default`** não servem para entrega. No cluster da disciplina, aplicar no contexto `grupo-9` ou declarar `namespace: grupo-9`. ⬜
+- **Credenciais em YAML/README** reprovam a higiene do projeto. Banco, salt e segredos OIDC ficam em `Secret` criado fora do git. ⬜
 
 ---
 
@@ -348,4 +402,4 @@ Todos em `/home/anjos/github/pspsd_ppesquisa_p1/`:
 
 **Chat.** ✅ Verificado. Dois clientes trocando mensagens simultaneamente na mesma conexão (full-duplex, não request/response), e o experimento de carga até 10k conexões contra as três variantes. Reproduzir com `cd chat && make todos && ./scripts/experimento_c10k.sh 8 1000 5000 10000`. Resultados em `chat/resultados/c10k.csv`, análise em `docs/experimento-c10k.md`. ✅
 
-**Carga.** Cada cenário roda pelo k6 no host contra `localhost:30080`, com saída simultânea para JSON em `resultados/` e para o Prometheus via remote-write. O relatório compara throughput, latência média e p95, CPU, memória e taxa de erro entre 10/50/100/500/1000 VUs, para quatro configurações: 1 réplica, 3 réplicas fixas, HPA por CPU e HPA por métrica customizada. ✅ (Mecanismo compilado e executável para as corridas de metas)
+**Carga.** No laboratório local, os cenários podem rodar contra `localhost:30080`. Na entrega final, devem rodar contra `https://kiriland.unb.br/grupo9`, com saída para JSON em `resultados/` e correlação com Prometheus/Grafana institucional. O relatório compara throughput, latência média e p95, CPU, memória e taxa de erro entre 10/50/100/500/1000 VUs, para quatro configurações: 1 réplica, 3 réplicas fixas, HPA por CPU e HPA por métrica customizada. ⬜ (scripts existem; execução final real pendente)

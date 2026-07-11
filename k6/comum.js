@@ -1,16 +1,39 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
-export const GATEWAY = __ENV.GATEWAY || 'http://localhost:30080';
-export const KEYCLOAK = __ENV.KEYCLOAK || 'http://localhost:8080';
-export const REALM = __ENV.REALM || 'hospital';
+export const GATEWAY = __ENV.GATEWAY || 'https://kiriland.unb.br/grupo9';
+export const KEYCLOAK = __ENV.KEYCLOAK || 'https://kiriland.unb.br/keycloak';
+export const REALM = __ENV.REALM || 'grupo09';
 export const CLIENT_ID = __ENV.CLIENT_ID || 'frontend';
+export const PROJETO_COORTE = __ENV.K6_PROJECT || 'PRJ01';
+export const CONDICAO_COORTE = __ENV.K6_CONDITION || 'DIABETES';
+export const PACIENTE_MEDICO = __ENV.K6_MED_PATIENT || '';
+export const PACIENTE_ESTAGIARIO = __ENV.K6_TRAINEE_PATIENT || PACIENTE_MEDICO;
+export const PACIENTE_NEGADO = __ENV.K6_DENIED_PATIENT || '';
 
-// Usuários do realm versionado em keycloak/realm-hospital.json.
+function senhaObrigatoria(nomeEnv) {
+  const valor = __ENV[nomeEnv];
+  if (!valor) {
+    throw new Error(`${nomeEnv} não definido; informe a senha por variável de ambiente`);
+  }
+  return valor;
+}
+
+// Usuários do Keycloak institucional do grupo 09.
+// As senhas não ficam no repositório.
 export const USUARIOS = {
-  medico: { username: 'med.cardoso', password: 'senha123' },
-  estagiario: { username: 'est.pereira', password: 'senha123' },
-  pesquisador: { username: 'pes.souza', password: 'senha123' },
+  medico: {
+    username: __ENV.K6_USER_MEDICO || 'med.cardoso',
+    passwordEnv: 'K6_PASSWORD_MEDICO',
+  },
+  estagiario: {
+    username: __ENV.K6_USER_ESTAGIARIO || 'est.ferreira',
+    passwordEnv: 'K6_PASSWORD_ESTAGIARIO',
+  },
+  pesquisador: {
+    username: __ENV.K6_USER_PESQUISADOR || 'pes.mendes',
+    passwordEnv: 'K6_PASSWORD_PESQUISADOR',
+  },
 };
 
 // Token obtido uma vez por VU no setup e reusado. Buscá-lo a cada iteração
@@ -22,7 +45,7 @@ export function obterToken(perfil) {
     grant_type: 'password',
     client_id: CLIENT_ID,
     username: u.username,
-    password: u.password,
+    password: senhaObrigatoria(u.passwordEnv),
   };
   const r = http.post(url, corpo, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
