@@ -48,22 +48,30 @@ Consequência prática: `kind`, Postgres local, Keycloak local e VMs kubeadm con
 
 ### Pendências críticas atualizadas
 
-- [ ] Auth Service real contra o banco institucional.
-- [ ] Patient Data Service real contra o banco institucional.
-- [ ] Gateway chamando `Auth -> Data -> Transform`.
+- [x] Auth Service real contra o banco institucional. ✅ (Danilo — introspecção do `pseudopep_g09` e regras validadas contra o banco real)
+- [x] Patient Data Service real contra o banco institucional. ✅ (Danilo — schema inglês traduzido para a forma interna em `servicos/data/conversao.py`; Transform inalterado)
+- [ ] Gateway chamando `Auth -> Data -> Transform`. ⬜ (pipeline gRPC já validado isoladamente pelo Danilo nos quatro níveis; falta o Gateway HTTP na frente)
 - [ ] Frontend usando Keycloak institucional (`realm=grupo09`).
 - [ ] Manifests finais para `grupo-9`, com `requests` e `limits` em todos os pods.
 - [ ] `Secret`/configuração segura para banco, `ANON_SALT` e parâmetros OIDC.
 - [ ] Validação funcional real dos 15 casos da matriz.
 - [ ] k6 contra `https://kiriland.unb.br/grupo9`, com tokens do Keycloak institucional.
-- [ ] `/metrics` nos serviços reais, não apenas mocks.
+- [x] `/metrics` em Auth, Data e Transform. ✅ (Danilo/Gabriel) — [ ] falta o scrape pelo Prometheus institucional via `ServiceMonitor`.
 - [ ] Grafana do grupo 09 com painéis das fases b/c/d/e.
 
 ---
 
-## Ambiente e orçamento de RAM
+## A cota do namespace é a restrição dominante da entrega
 
-Esta seção descreve o laboratório local. Ela não substitui o alvo final `kiriland/grupo-9`.
+No ambiente final, o teto que governa o HPA e o "limite de escalabilidade" (fase d.iv) **não é mais a RAM do laptop** — é administrativo: a `ResourceQuota` do namespace `grupo-9` (requests **3 CPU / 4Gi**, limits **6 CPU / 7Gi**), contando **apenas os nossos pods**. Banco, Keycloak, Prometheus e Grafana são do professor e ficam fora da nossa cota — mais folgado que o laptop, porque não pagamos pela infra de apoio; só empacotamos Gateway + Auth + Data + Transform + Chat e suas réplicas de HPA.
+
+Consequência: a soma de `limits` × réplicas máximas de HPA tem que caber em 6 CPU / 7Gi. Quando estoura, pods vão a `Pending` com `exceeded quota` — e isso **é** a fase (d.iv), agora com um teto de nuvem real em vez do teto físico do laptop. Documentar essa diferença (`kubectl describe resourcequota cota-grupo` no ponto da virada) é um achado. Todo Deployment precisa de `requests`/`limits`, senão a cota rejeita o pod antes mesmo do HPA.
+
+---
+
+## Ambiente e orçamento de RAM (laboratório local de desenvolvimento)
+
+Esta seção descreve **só o laboratório local** (kind + banco sintético), onde a RAM do laptop é o teto. Ela **não** governa a entrega, que é limitada pela cota do namespace descrita acima.
 
 Laptop i7-1255U (2 P-cores + 8 E-cores, 12 threads), 16 GB de RAM com **9,6 GB disponíveis** e 19,7 GB de swap, dos quais 15,3 GB in **zram** (compressão em memória). O zram é a rede de segurança contra OOMKill nos picos e permite ser ambicioso com a stack de observabilidade.
 
@@ -181,23 +189,25 @@ O objetivo não é confirmar que "mais réplicas = mais rápido".
 
 ### Saturação do pool de conexões, medida e corrigida
 
-Previsão: ao escalar Data para muitos pods, o total de conexões estoura o `max_connections` do Postgres e o throughput **degrada** em vez de crescer — escalar piora. Isso se mede com `data_db_pool_em_uso` e as métricas do postgres_exporter, se demonstra com um gráfico de throughput versus número de réplicas de Data que sobe e depois desce, e se corrige colocando **pgbouncer** na frente do banco. Rodar o mesmo teste antes e depois do pgbouncer, com o gráfico dos dois, é um resultado de pesquisa de verdade — hipótese, medição, intervenção, nova medição. ⬜
+Previsão: ao escalar Data para muitos pods, o total de conexões estoura o `max_connections` do Postgres e o throughput **degrada** em vez de crescer — escalar piora. No cluster real o argumento fica mais forte: o banco é **compartilhado e não controlado por nós** (não podemos mexer no `max_connections` do `pseudopep_g09`), exatamente o cenário em que replicar o serviço que consome o banco não resolve nada. Isso se mede com `data_db_pool_em_uso`, se demonstra com um gráfico de throughput versus número de réplicas de Data que sobe e depois desce, e se corrige colocando **pgbouncer no nosso namespace** na frente do banco. Rodar o mesmo teste antes e depois do pgbouncer, com o gráfico dos dois, é um resultado de pesquisa de verdade — hipótese, medição, intervenção, nova medição. A impossibilidade de tocar no banco é *feature* do experimento, não obstáculo. ⬜
 
 ### Perfis de recurso e HPA
 
 O HPA calcula `utilização = uso / requests`. Com `requests.cpu=100m` e `limits.cpu=300m`, um pod Python sob carga é throttled em 300m, lendo ~300% contra o alvo de 60% — o HPA escala agressivamente e a criação de pods fica visível no vídeo. ✅
 
+Perfis recalibrados para a cota do namespace (max de HPA reduzido para caber em 6 CPU / 7Gi de limits). O Postgres sai da tabela: é o banco do professor (`192.168.122.1`), fora da nossa cota.
+
 | Serviço | requests (cpu/mem) | limits (cpu/mem) | HPA | Estado |
 |---|---|---|---|---|
-| Auth | 100m / 64Mi | 250m / 128Mi | min 1, max 6, alvo 60% | ⬜ (Pendente) |
-| Data | 100m / 64Mi | 300m / 128Mi | min 1, max 8, alvo 60% | ⬜ (Pendente) |
-| Transform | 100m / 64Mi | 300m / 128Mi | min 1, max 8, alvo 60% | ✅ Concluído |
-| Gateway | 150m / 96Mi | 500m / 192Mi | min 1, max 4, alvo 70% | ⬜ (Pendente) |
-| Postgres | 250m / 256Mi | 1000m / 512Mi | sem HPA | ✅ Concluído |
+| Auth | 100m / 64Mi | 250m / 128Mi | min 1, max 4, alvo 60% | ⬜ (deploy pendente; serviço pronto) |
+| Data | 100m / 96Mi | 300m / 192Mi | min 1, max 5, alvo 60% | ⬜ (deploy pendente; serviço pronto) |
+| Transform | 100m / 64Mi | 300m / 128Mi | min 1, max 5, alvo 60% | ✅ Concluído |
+| Gateway | 150m / 96Mi | 400m / 192Mi | min 1, max 3, alvo 70% | ⬜ (Pendente) |
+| Chat | 50m / 32Mi | 100m / 64Mi | sem HPA | 🟡 (serviço pronto; falta empacotar) |
 
-O Gateway fica folgado de propósito, para que os serviços Python sejam a estrela do gargalo. O Postgres recebe CPU suficiente para o caminho leve não travar por DB — assim controlamos *quando* o banco vira gargalo, em vez de ele mascarar tudo. ✅
+Somatório no pico: requests ≈ 1,9 CPU / 2,3Gi (cabe em 3/4), limits ≈ 5,2 CPU / 3,1Gi (cabe em 6/7). Números a confirmar com o `describe resourcequota` real na fase de deploy. O Gateway fica folgado de propósito, para que os serviços Python sejam a estrela do gargalo. ✅
 
-Sobre o "limite de escalabilidade" (fase d.iv): não forçar um teto artificial. O kind anuncia os 12 threads por nó, então pods não vão a `Pending`. O teto real e mais interessante é físico: ao chegar a ~8–10 pods Python disputando CPU, o host satura, o throttling generaliza, e **adicionar réplicas para de reduzir o p95 — ele plateia e depois sobe**. Reporta-se como teto compute-bound do host, com o gráfico de p95 versus réplicas mostrando a virada. ✅
+Sobre o "limite de escalabilidade" (fase d.iv): **o teto na entrega é a cota do namespace**, não os threads de um laptop. Ao somar réplicas, os `limits.cpu` batem os 6 CPU da cota e novos pods vão a `Pending` com `exceeded quota`. Reporta-se com o gráfico de p95 × réplicas, anotando o ponto em que o `kubectl describe resourcequota cota-grupo` mostra o teto atingido — um limite de nuvem real, mais interessante de discutir que o teto físico do laptop. (No laboratório local, o teto observável é o outro: ~8–10 pods Python saturam os 12 threads do host e o p95 plateia; vale como contraste kind × cota.) ⬜
 
 ### Resiliência
 
@@ -357,7 +367,16 @@ Estes são erros que vão acontecer, não hipóteses:
 - **Confundir realm local `hospital` com realm final `grupo09`** produz token com `issuer` errado e o Gateway deve recusar. Todos os scripts finais precisam permitir `KEYCLOAK=https://kiriland.unb.br/keycloak` e `REALM=grupo09`. ⬜
 - **Usar usuários do seed local nos testes finais** pode falhar porque o Keycloak institucional lista usuários diferentes dos rascunhos antigos. A matriz final deve ser ajustada depois da introspecção do banco e dos tokens reais. ⬜
 - **Manifests com `namespace: default`** não servem para entrega. No cluster da disciplina, aplicar no contexto `grupo-9` ou declarar `namespace: grupo-9`. ⬜
-- **Credenciais em YAML/README** reprovam a higiene do projeto. Banco, salt e segredos OIDC ficam em `Secret` criado fora do git. ⬜
+- **Credenciais em YAML/README** reprovam a higiene do projeto. Banco, salt e segredos OIDC ficam em `Secret` criado fora do git. ⬜ (o `.gitignore` já barra `*kubeconfig*.yaml`, `dicas_uso_clusterK8S.zip` e `docs/ambiente-real.md`)
+
+Riscos específicos do cluster compartilhado do professor, que não existiam no laboratório kind:
+
+- **`kind load docker-image` não existe no `kiriland`.** As imagens precisam ir para um **registry acessível ao cluster** (Docker Hub público, GHCR ou registry da disciplina). `imagePullPolicy` deixa de ser `IfNotPresent`. ⬜
+- **`exceeded quota`**: a soma de `limits` × réplicas de HPA passa dos 6 CPU / 7Gi e pods vão a `Pending`. É *feature* (fase d.iv) quando enquadrado, vira bug se travar o baseline. Conferir com `kubectl describe resourcequota cota-grupo`. ⬜
+- **ServiceMonitor não raspado** se não carregar o label que o `serviceMonitorSelector` do operator **do professor** espera (tipicamente `release: <nome>`). Descobrir inspecionando um ServiceMonitor existente ou o CRD do Prometheus dele. ⬜
+- **Ingress `/grupo9` pode exigir *path rewrite*** (a app recebe `/grupo9/api/...` em vez de `/api/...`). Alinhar as rotas do Gateway e do `k6/comum.js` com o que o Ingress entrega. ⬜
+- **`protobuf` 5.x nos serviços do Danilo**: o `requirements.txt` do Transform subiu para `protobuf==5.27.2`. A imagem do Transform precisa ser **rebuildada com os stubs `*_pb2.py` regerados** por um `grpc_tools.protoc` compatível, senão dá mismatch de versão em runtime. ⬜
+- **`prometheus-adapter` e Alertmanager podem exigir RBAC cluster-wide** que não temos no namespace `grupo-9` (o adapter do laboratório kind foi instalado com permissão total, o que não se repete aqui). Verificar cedo; plano B: recording rule + painel em vez de alerta, e HPA-por-CPU em vez de por-latência. ⬜
 
 ---
 

@@ -10,3 +10,11 @@ resultados/*.txt
 .env
 .venv/
 chat/bin/
+
+# Credenciais do cluster do professor 
+dicas_uso_clusterK8S.zip
+dicas_uso_clusterK8S/
+*kubeconfig*.yaml
+*kubeconfig*.yml
+docs/ambiente-real.md
+.venv*/

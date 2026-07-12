@@ -1,12 +1,3 @@
-/* Servidor de chat com select(). Existe para comparação no experimento C10K.
- *
- * Uso: servidor_select <porta> [--eco]
- *
- * Duas limitações que o experimento mede, e que não são defeito desta
- * implementação e sim da chamada de sistema:
- *   - FD_SETSIZE (1024 na glibc) é o teto de descritores por fd_set;
- *   - o kernel percorre todos os descritores a cada chamada, mesmo os ociosos.
- */
 
 #define _GNU_SOURCE
 #include "../comum.h"
@@ -19,9 +10,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-typedef struct {
-    int    em_uso;
-    char   entrada[TAM_ENTRADA];
+typedef struct
+{
+    int em_uso;
+    char entrada[TAM_ENTRADA];
     size_t entrada_len;
     Buffer saida;
 } Conexao;
@@ -30,44 +22,64 @@ static Conexao conexoes[FD_SETSIZE];
 static int maior_fd;
 static long recusadas_por_fd_setsize;
 
-static void fechar_conexao(int fd) {
-    if (!conexoes[fd].em_uso) return;
+static void fechar_conexao(int fd)
+{
+    if (!conexoes[fd].em_uso)
+        return;
     close(fd);
     buffer_liberar(&conexoes[fd].saida);
     conexoes[fd].em_uso = 0;
     conexoes[fd].entrada_len = 0;
 }
 
-static void enfileirar(int fd, const char *dados, size_t n) {
-    if (!conexoes[fd].em_uso) return;
-    if (buffer_anexar(&conexoes[fd].saida, dados, n) < 0) fechar_conexao(fd);
+static void enfileirar(int fd, const char *dados, size_t n)
+{
+    if (!conexoes[fd].em_uso)
+        return;
+    if (buffer_anexar(&conexoes[fd].saida, dados, n) < 0)
+        fechar_conexao(fd);
 }
 
-static void difundir(int remetente, const char *linha, size_t n, Modo modo) {
-    if (modo == MODO_ECO) { enfileirar(remetente, linha, n); return; }
+static void difundir(int remetente, const char *linha, size_t n, Modo modo)
+{
+    if (modo == MODO_ECO)
+    {
+        enfileirar(remetente, linha, n);
+        return;
+    }
     for (int fd = 0; fd <= maior_fd; fd++)
-        if (conexoes[fd].em_uso && fd != remetente) enfileirar(fd, linha, n);
+        if (conexoes[fd].em_uso && fd != remetente)
+            enfileirar(fd, linha, n);
 }
 
-static void processar_entrada(int fd, Modo modo) {
+static void processar_entrada(int fd, Modo modo)
+{
     Conexao *c = &conexoes[fd];
     size_t inicio = 0;
-    for (size_t i = 0; i < c->entrada_len; i++) {
-        if (c->entrada[i] != '\n') continue;
+    for (size_t i = 0; i < c->entrada_len; i++)
+    {
+        if (c->entrada[i] != '\n')
+            continue;
         difundir(fd, c->entrada + inicio, i - inicio + 1, modo);
-        if (!c->em_uso) return;
+        if (!c->em_uso)
+            return;
         inicio = i + 1;
     }
-    if (inicio > 0) {
+    if (inicio > 0)
+    {
         memmove(c->entrada, c->entrada + inicio, c->entrada_len - inicio);
         c->entrada_len -= inicio;
-    } else if (c->entrada_len == TAM_ENTRADA) {
+    }
+    else if (c->entrada_len == TAM_ENTRADA)
+    {
         fechar_conexao(fd);
     }
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         fprintf(stderr, "uso: %s <porta> [--eco]\n", argv[0]);
         return 1;
     }
@@ -77,37 +89,51 @@ int main(int argc, char **argv) {
     ignorar_sigpipe();
 
     int fd_escuta = criar_socket_escuta(porta, 4096);
-    if (fd_escuta < 0) { perror("listen"); return 1; }
+    if (fd_escuta < 0)
+    {
+        perror("listen");
+        return 1;
+    }
     definir_nao_bloqueante(fd_escuta);
     maior_fd = fd_escuta;
 
     fprintf(stderr, "select: porta=%u modo=%s FD_SETSIZE=%d\n",
             porta, modo == MODO_ECO ? "eco" : "broadcast", FD_SETSIZE);
 
-    for (;;) {
+    for (;;)
+    {
         fd_set leitura, escrita;
         FD_ZERO(&leitura);
         FD_ZERO(&escrita);
         FD_SET(fd_escuta, &leitura);
 
-        for (int fd = 0; fd <= maior_fd; fd++) {
-            if (!conexoes[fd].em_uso) continue;
+        for (int fd = 0; fd <= maior_fd; fd++)
+        {
+            if (!conexoes[fd].em_uso)
+                continue;
             FD_SET(fd, &leitura);
-            if (conexoes[fd].saida.off < conexoes[fd].saida.tam) FD_SET(fd, &escrita);
+            if (conexoes[fd].saida.off < conexoes[fd].saida.tam)
+                FD_SET(fd, &escrita);
         }
 
         int n = select(maior_fd + 1, &leitura, &escrita, NULL, NULL);
-        if (n < 0) {
-            if (errno == EINTR) continue;
+        if (n < 0)
+        {
+            if (errno == EINTR)
+                continue;
             perror("select");
             break;
         }
 
-        if (FD_ISSET(fd_escuta, &leitura)) {
-            for (;;) {
+        if (FD_ISSET(fd_escuta, &leitura))
+        {
+            for (;;)
+            {
                 int fd = accept(fd_escuta, NULL, NULL);
-                if (fd < 0) break;
-                if (fd >= FD_SETSIZE) {
+                if (fd < 0)
+                    break;
+                if (fd >= FD_SETSIZE)
+                {
                     recusadas_por_fd_setsize++;
                     close(fd);
                     continue;
@@ -115,37 +141,48 @@ int main(int argc, char **argv) {
                 definir_nao_bloqueante(fd);
                 conexoes[fd].em_uso = 1;
                 conexoes[fd].entrada_len = 0;
-                if (fd > maior_fd) maior_fd = fd;
+                if (fd > maior_fd)
+                    maior_fd = fd;
             }
         }
 
-        for (int fd = 0; fd <= maior_fd; fd++) {
-            if (!conexoes[fd].em_uso) continue;
+        for (int fd = 0; fd <= maior_fd; fd++)
+        {
+            if (!conexoes[fd].em_uso)
+                continue;
 
-            if (FD_ISSET(fd, &escrita)) {
+            if (FD_ISSET(fd, &escrita))
+            {
                 Buffer *b = &conexoes[fd].saida;
                 ssize_t w = write(fd, b->dados + b->off, b->tam - b->off);
-                if (w > 0) buffer_consumir(b, (size_t)w);
-                else if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                if (w > 0)
+                    buffer_consumir(b, (size_t)w);
+                else if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                {
                     fechar_conexao(fd);
                     continue;
                 }
             }
 
-            if (FD_ISSET(fd, &leitura)) {
+            if (FD_ISSET(fd, &leitura))
+            {
                 Conexao *c = &conexoes[fd];
                 ssize_t r = read(fd, c->entrada + c->entrada_len,
                                  TAM_ENTRADA - c->entrada_len);
-                if (r > 0) {
+                if (r > 0)
+                {
                     c->entrada_len += (size_t)r;
                     processar_entrada(fd, modo);
-                } else if (r == 0 || (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                }
+                else if (r == 0 || (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+                {
                     fechar_conexao(fd);
                 }
             }
         }
 
-        if (recusadas_por_fd_setsize) {
+        if (recusadas_por_fd_setsize)
+        {
             fprintf(stderr, "select: %ld conexoes recusadas por FD_SETSIZE=%d\n",
                     recusadas_por_fd_setsize, FD_SETSIZE);
             recusadas_por_fd_setsize = 0;

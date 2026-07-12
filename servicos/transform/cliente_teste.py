@@ -34,21 +34,21 @@ def _dados() -> comum_pb2.ConjuntoDadosClinicos:
         atendimentos=[comum_pb2.Atendimento(
             id_atendimento="E00000001", id_paciente="P000001",
             data_inicio="2023-02-10T08:00:00", data_fim="2023-02-10T11:00:00",
-            tipo_atendimento="Ambulatorial", setor="Endocrinologia",
+            tipo_atendimento="AMBULATORIAL", setor="ENDOCRINOLOGY",
         )],
         eventos=[
             comum_pb2.EventoClinico(
                 id_evento="1", id_paciente="P000001", id_atendimento="E00000001",
-                tipo_evento="Condicao", codigo_tipo_evento="Diabetes",
+                tipo_evento="CONDITION", codigo_tipo_evento="DIABETES",
                 descricao="Diabetes Mellitus Tipo 2", data_evento="2023-02-10"),
             comum_pb2.EventoClinico(
                 id_evento="2", id_paciente="P000001", id_atendimento="E00000001",
-                tipo_evento="Observacao", codigo_tipo_evento="HbA1c",
+                tipo_evento="OBSERVATION", codigo_tipo_evento="HBA1C",
                 descricao="Hemoglobina Glicada", data_evento="2023-02-10",
                 valor=8.1, unidade="%"),
             comum_pb2.EventoClinico(
                 id_evento="3", id_paciente="P000001", id_atendimento="E00000001",
-                tipo_evento="Medicacao", codigo_tipo_evento="Metformina",
+                tipo_evento="MEDICATION", codigo_tipo_evento="METFORMIN",
                 descricao="Metformina 850 mg", data_evento="2023-02-10",
                 valor=850.0, unidade="mg"),
         ],

@@ -1,14 +1,7 @@
-#!/usr/bin/env bash
-# Experimento C10K: epoll x select x thread-por-conexao.
-#
-# Para cada servidor e cada numero de conexoes, mede memoria residente, CPU do
-# servidor e latencia de ida-e-volta das conexoes ativas. Saida em CSV.
-#
-# Uso: ./scripts/experimento_c10k.sh [duracao_s] [conexoes...]
+
 
 set -uo pipefail
 
-# awk e printf precisam de ponto decimal, senao o CSV ganha virgulas.
 export LC_ALL=C
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -35,8 +35,7 @@ class SaltAusente(RuntimeError):
 def _salt() -> bytes:
     salt = os.environ.get("ANON_SALT")
     if not salt:
-        # Sem default: o espaço de id_paciente é pequeno e conhecido, então um
-        # salt embutido no código torna o pseudônimo reversível por força bruta.
+        # Sem default: salt embutido tornaria o pseudônimo reversível por força bruta.
         raise SaltAusente(
             "ANON_SALT não definido. Pseudonimização sem salt secreto é reversível."
         )
@@ -70,10 +69,9 @@ def faixa_etaria(data_nascimento: str, hoje: date | None = None) -> str:
 
 
 def projetar_paciente(paciente: dict, nivel: int, hoje: date | None = None) -> dict:
-    """Monta um dicionário novo com os campos permitidos.
+    """Monta um dicionário novo com os campos permitidos (allowlist).
 
-    Nunca copiar e apagar: um campo acrescentado ao schema passaria a vazar
-    silenciosamente.
+    Não copiar-e-apagar: um campo novo no schema vazaria silenciosamente.
     """
     if nivel == FULL:
         return {
@@ -114,8 +112,7 @@ def projetar_paciente(paciente: dict, nivel: int, hoje: date | None = None) -> d
 def mapa_de_ids(pacientes: list[dict], nivel: int) -> dict[str, str]:
     """id real -> id exibido, para reescrever as referências do Bundle.
 
-    Sem isso, Encounter.subject e Observation.subject vazam o id que o Patient
-    acabou de esconder.
+    Sem isto, Encounter.subject e Observation.subject vazariam o id oculto.
     """
     if nivel == ANONYMIZED:
         return {p["id_paciente"]: pseudonimo(p["id_paciente"]) for p in pacientes}

@@ -17,12 +17,14 @@ SYSTEM_CNS = "https://fhir.saude.gov.br/sid/cns"
 EXT_FAIXA_ETARIA = "http://hl7.org/fhir/StructureDefinition/patient-ageRange"
 EXT_ESTATISTICAS = "urn:pspd:estatisticas-exames"
 
-# tipo_atendimento -> HL7 v3 ActEncounterCode
+# encounter_type (banco) -> HL7 v3 ActEncounterCode
 _CLASSE_ENCONTRO = {
-    "Ambulatorial": ("AMB", "ambulatory"),
-    "Retorno": ("AMB", "ambulatory"),
-    "Emergencia": ("EMER", "emergency"),
-    "Internacao": ("IMP", "inpatient encounter"),
+    "AMBULATORIAL": ("AMB", "ambulatory"),
+    "FOLLOW_UP": ("AMB", "ambulatory"),
+    "EMERGENCY": ("EMER", "emergency"),
+    "INPATIENT": ("IMP", "inpatient encounter"),
+    "ICU": ("ACUTE", "inpatient acute"),
+    "TELEHEALTH": ("VR", "virtual"),
 }
 
 
@@ -120,9 +122,9 @@ def montar_medication_request(e: dict, ref_paciente: str) -> dict:
 
 
 _POR_TIPO_EVENTO = {
-    "Condicao": montar_condition,
-    "Observacao": montar_observation,
-    "Medicacao": montar_medication_request,
+    "CONDITION": montar_condition,
+    "OBSERVATION": montar_observation,
+    "MEDICATION": montar_medication_request,
 }
 
 
