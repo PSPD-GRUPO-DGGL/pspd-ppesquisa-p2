@@ -19,8 +19,6 @@ function senhaObrigatoria(nomeEnv) {
   return valor;
 }
 
-// Usuários do Keycloak institucional do grupo 09.
-// As senhas não ficam no repositório.
 export const USUARIOS = {
   medico: {
     username: __ENV.K6_USER_MEDICO || 'med.cardoso',
@@ -36,8 +34,7 @@ export const USUARIOS = {
   },
 };
 
-// Token obtido uma vez por VU no setup e reusado. Buscá-lo a cada iteração
-// mediria o Keycloak, não a aplicação.
+// Token no setup, não por iteração: senão a latência mediria o Keycloak, não a app.
 export function obterToken(perfil) {
   const u = USUARIOS[perfil];
   const url = `${KEYCLOAK}/realms/${REALM}/protocol/openid-connect/token`;
@@ -77,24 +74,21 @@ export function conferirBundle(resposta, resourceTypeEsperado) {
   });
 }
 
-// Degraus exigidos pelo enunciado (seção 3.b): 10, 50, 100, 500 e 1000 VUs.
-// Patamares de 1 min com rampas curtas; o warm-up é descartado na análise.
 export const DEGRAUS = {
   executor: 'ramping-vus',
   startVUs: 0,
   stages: [
-    { duration: '15s', target: 10 },   { duration: '1m', target: 10 },
-    { duration: '15s', target: 50 },   { duration: '1m', target: 50 },
-    { duration: '15s', target: 100 },  { duration: '1m', target: 100 },
-    { duration: '30s', target: 500 },  { duration: '1m', target: 500 },
+    { duration: '15s', target: 10 }, { duration: '1m', target: 10 },
+    { duration: '15s', target: 50 }, { duration: '1m', target: 50 },
+    { duration: '15s', target: 100 }, { duration: '1m', target: 100 },
+    { duration: '30s', target: 500 }, { duration: '1m', target: 500 },
     { duration: '30s', target: 1000 }, { duration: '1m', target: 1000 },
     { duration: '30s', target: 0 },
   ],
   gracefulRampDown: '30s',
 };
 
-// SLO do projeto. `abortOnFail: false` porque a violação do limiar é um
-// resultado esperado nos degraus altos, e não motivo para encerrar a corrida.
+// abortOnFail:false — violar o limiar nos degraus altos é esperado, não motivo de abortar.
 export const LIMIARES = {
   http_req_failed: [{ threshold: 'rate<0.01', abortOnFail: false }],
   http_req_duration: [{ threshold: 'p(95)<500', abortOnFail: false }],

@@ -24,8 +24,6 @@ export const options = {
 const duracaoAnon = new Trend('cenario_c_duracao_ms', true);
 const recursosPorResposta = new Trend('cenario_c_recursos_fhir');
 
-// Varia o tamanho do lote para expor como o custo do Transform escala com o
-// número de pacientes pseudonimizados.
 const LOTES = [50, 100, 200];
 
 export function setup() {
@@ -41,7 +39,7 @@ export default function (dados) {
     try {
       recursosPorResposta.add(r.json('entry').length);
     } catch (_) {
-      // resposta sem entry: contabilizada pelo check acima
+      // sem entry: já contabilizado pelo check acima
     }
   }
   duracaoAnon.add(r.timings.duration);

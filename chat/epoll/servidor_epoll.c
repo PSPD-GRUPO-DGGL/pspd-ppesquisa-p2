@@ -53,7 +53,7 @@ static void fechar_conexao(int fd)
     conexoes_ativas--;
 }
 
-/* Edge-triggered: escreve até EAGAIN, senão o evento de gravável não volta. */
+/* Edge-triggered avisa "dá pra escrever" só uma vez: escreva até EAGAIN ou a mensagem trava. */
 static void drenar_saida(int fd)
 {
     Buffer *b = &conexoes[fd].saida;
@@ -102,8 +102,7 @@ static void difundir(int remetente, const char *linha, size_t n, Modo modo)
             enfileirar(fd, linha, n);
 }
 
-/* Consome linhas completas do buffer de entrada. Uma linha maior que
-   TAM_ENTRADA derruba a conexão em vez de estourar o buffer. */
+/* Linha maior que TAM_ENTRADA derruba a conexão, em vez de estourar o buffer. */
 static void processar_entrada(int fd, Modo modo)
 {
     Conexao *c = &conexoes[fd];
