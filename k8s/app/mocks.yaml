@@ -14,17 +14,17 @@ spec:
         app: api-gateway
     spec:
       containers:
-      - name: gateway
-        image: kennethreitz/httpbin
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: 150m
-            memory: 96Mi
-          limits:
-            cpu: 500m
-            memory: 192Mi
+        - name: gateway
+          image: kennethreitz/httpbin
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 150m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 192Mi
 ---
 apiVersion: v1
 kind: Service
@@ -34,9 +34,9 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 80
-    targetPort: 80
-    nodePort: 30080
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
   selector:
     app: api-gateway
 ---
@@ -56,15 +56,15 @@ spec:
         app: auth-service
     spec:
       containers:
-      - name: auth
-        image: kennethreitz/httpbin
-        resources:
-          requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 250m
-            memory: 128Mi
+        - name: auth
+          image: kennethreitz/httpbin
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
@@ -73,7 +73,58 @@ metadata:
   namespace: default
 spec:
   ports:
-  - port: 50051
-    targetPort: 80
+    - port: 50051
+      targetPort: 80
   selector:
     app: auth-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-hospital-app
+  namespace: grupo-9
+  labels:
+    app: mock-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-app
+  template:
+    metadata:
+      labels:
+        app: mock-app
+    spec:
+      containers:
+        - name: mock-web
+          # Imagem leve de mock que responde JSON de teste instantaneamente
+          image: mhart/alpine-node:12
+          command:
+            [
+              "node",
+              "-e",
+              "const http = require('http'); http.createServer((req, res) => { res.writeHead(200, {'Content-Type': 'application/json'}); res.end(JSON.stringify({ status: 'mock-bypass-active', path: req.url, timestamp: Date.now() })); }).listen(3000);",
+            ]
+          ports:
+            - containerPort: 3000
+              name: http
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "150m"
+              memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-app-service
+  namespace: grupo-9
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    app: mock-app
