@@ -1,26 +1,62 @@
-# Kubernetes
+# Kubernetes — deploy no namespace `grupo-9`
 
-Os manifests existentes em `k8s/app/` e `k8s/infra/` nasceram para laboratório local com `kind`, mocks e namespace `default`. Eles **não** são a forma final de entrega no cluster da disciplina.
+Manifests da entrega, no namespace `grupo-9` do cluster do professor. Exposto em `https://kiriland.unb.br/grupo9`.
 
-## Alvo final
+## Split dev × entrega
 
-Para a entrega, criar ou ajustar manifests para:
+- **`k8s/app/`** — entrega no `grupo-9` (abaixo).
+- **`k8s/infra/`** (`postgres.yaml`, `keycloak.yaml`, `kind-config.yaml`) — **só laboratório local** com `kind`. O professor já provê banco e Keycloak; **não aplicar no `grupo-9`**. Servem também à seção "montagem do K8s" do relatório.
+- **`k8s/app/mocks.yaml`** — dummies (`httpbin`) para ensaio de HPA local; **aposentado** pela entrega real, não aplicar no `grupo-9`.
 
-- namespace/contexto `grupo-9`;
-- URL pública `https://kiriland.unb.br/grupo9`;
-- banco institucional `pseudopep_g09`, acessado por `Secret`;
-- Keycloak institucional `https://kiriland.unb.br/keycloak/realms/grupo09`;
-- `requests` e `limits` em todos os containers;
-- Services internos para Gateway/Auth/Data/Transform;
-- endpoint `/metrics` em todos os serviços reais;
-- HPA apontando para Deployments reais, não mocks.
+## Manifests da entrega (`k8s/app/`)
 
-Não versionar segredos. Um arquivo final pode referenciar `Secret`, mas os valores reais devem ser criados fora do git.
+| Arquivo | Conteúdo |
+|---|---|
+| `auth-data.yaml` | Deployments/Services de Auth (50051) e Data (50052), com probes |
+| `transform.yaml` | Deployment/Service do Transform (50053), `ANON_SALT` via Secret |
+| `gateway.yaml` | Deployment/Service do Gateway (3000) — serve também o frontend estático |
+| `ingress.yaml` | Ingress `/grupo9` → gateway (assume ingress-nginx) |
+| `servicemonitors.yaml` | ServiceMonitors dos quatro serviços |
+| `hpa.yaml` | HPAs recalibrados à cota (auth 4, data 5, transform 5, gateway 3) |
+| `pdb.yaml` | PodDisruptionBudgets |
+| `secret-db.example.yaml` | Chaves esperadas do Secret (preencher fora do git) |
 
-## Regra prática
+Todas as imagens (`pspd/auth|data|transform|gateway`) expõem métricas; Auth/Data/Transform em `:8000/metrics`, Gateway em `:3000/metrics`.
 
-- `k8s/infra/postgres.yaml` e `k8s/infra/keycloak.yaml`: uso local, não aplicar no cluster final.
-- `k8s/app/mocks.yaml`: uso local para ensaio de HPA/carga, não conta como validação funcional final.
-- `k8s/app/auth-data.yaml`: base inicial dos serviços reais Auth/Data para `grupo-9`.
-- `k8s/app/secret-db.example.yaml`: exemplo de chaves esperadas; copiar para fora do git e preencher com valores reais antes de aplicar.
-- `k8s/app/hpa*.yaml`: reaproveitar a ideia, mas trocar `namespace`, `scaleTargetRef` e métricas para os serviços reais antes da entrega.
+## Runbook
+
+**1. Imagens no registry** (o cluster baixa imagens públicas do Docker Hub):
+```
+REGISTRY=docker.io/SEU_USUARIO ./scripts/build_push.sh
+```
+
+**2. Secret real** (fora do git — tem credenciais):
+```
+kubectl -n grupo-9 create secret generic pspd-db \
+  --from-literal=DB_HOST=192.168.122.1 \
+  --from-literal=DB_PORT=5432 \
+  --from-literal=DB_NAME=pseudopep_g09 \
+  --from-literal=DB_USER=grupo09_user \
+  --from-literal=DB_PASSWORD='***' \
+  --from-literal=ANON_SALT='***'
+```
+
+**3. Aplicar** (adapta imagem/registry e pull policy, aplica na ordem certa):
+```
+REGISTRY=docker.io/SEU_USUARIO KUBECONFIG=../kubeconfig-grupo-9.yaml ./scripts/deploy.sh
+```
+
+**4. Verificar:**
+```
+kubectl -n grupo-9 get pods,svc,ingress,hpa
+curl -k https://kiriland.unb.br/grupo9/healthz
+```
+
+## Antes de valer a nota — confirmar
+
+- **Label do ServiceMonitor**: `servicemonitors.yaml` usa `release: kube-prometheus-stack`. Descobrir o valor real do `serviceMonitorSelector` do operator do professor; sem ele, nada é raspado:
+  ```
+  kubectl get prometheus -A -o jsonpath='{.items[0].spec.serviceMonitorSelector}'
+  ```
+- **Ingress**: `ingress.yaml` assume ingress-nginx (`rewrite-target: /$2`). Se o controller for outro, ajustar a anotação e a `ingressClassName`.
+- **Cota**: `kubectl -n grupo-9 describe resourcequota` — a soma de `limits` × réplicas de HPA cabe em 6 CPU / 7Gi.

@@ -1,13 +1,76 @@
+# HPAs recalibrados para caber na cota do namespace (limits 6 CPU / 7Gi).
+# Ver a tabela em docs/PLANO.md. Todo alvo precisa de requests.cpu, senão o HPA
+# reporta <unknown> e nunca escala.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: mock-hpa
+  name: auth-service
   namespace: grupo-9
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: mock-hospital-app
+    name: auth-service
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: data-service
+  namespace: grupo-9
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: data-service
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: transform-service
+  namespace: grupo-9
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: transform-service
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+  namespace: grupo-9
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
   minReplicas: 1
   maxReplicas: 3
   metrics:
@@ -16,4 +79,4 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 50
+        averageUtilization: 70

@@ -1,21 +1,24 @@
+# Assume ingress-nginx. Se o controller do professor for outro (traefik etc.),
+# ajustar a anotação de rewrite e a ingressClassName.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: gateway-ingress
+  name: grupo9
   namespace: grupo-9
   annotations:
-    kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
+  # ingressClassName: nginx   # descomente/ajuste conforme o cluster
   rules:
   - host: kiriland.unb.br
     http:
       paths:
+      # /grupo9 -> gateway (que serve o frontend em / e a API em /api).
+      # $2 remove o prefixo: /grupo9/api/... vira /api/...
       - path: /grupo9(/|$)(.*)
         pathType: ImplementationSpecific
         backend:
           service:
-            # Apontando temporariamente para o mock
-            name: mock-app-service 
+            name: api-gateway
             port:
               number: 3000
