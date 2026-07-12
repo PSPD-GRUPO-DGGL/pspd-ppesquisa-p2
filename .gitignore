@@ -18,3 +18,12 @@ dicas_uso_clusterK8S/
 *kubeconfig*.yml
 docs/ambiente-real.md
 .venv*/
+
+# Ignora executáveis locais de teste
+k6
+k6.exe
+resultados/*.json
+
+# Ignora arquivos de credenciais reais de banco
+k8s/app/*secret-db.yaml
+!k8s/app/secret-db.example.yaml

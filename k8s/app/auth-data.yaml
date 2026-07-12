@@ -16,24 +16,24 @@ spec:
         app: auth-service
     spec:
       containers:
-      - name: auth
-        image: pspd/auth:0.1.0
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 50051
-          name: grpc
-        - containerPort: 8000
-          name: metrics
-        envFrom:
-        - secretRef:
-            name: pspd-db
-        resources:
-          requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 250m
-            memory: 128Mi
+        - name: auth
+          image: pspd/auth:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 8000
+              name: metrics
+          envFrom:
+            - secretRef:
+                name: pspd-db
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -46,12 +46,12 @@ spec:
   selector:
     app: auth-service
   ports:
-  - name: grpc
-    port: 50051
-    targetPort: grpc
-  - name: metrics
-    port: 8000
-    targetPort: metrics
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+    - name: metrics
+      port: 8000
+      targetPort: metrics
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -71,24 +71,24 @@ spec:
         app: data-service
     spec:
       containers:
-      - name: data
-        image: pspd/data:0.1.0
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 50052
-          name: grpc
-        - containerPort: 8000
-          name: metrics
-        envFrom:
-        - secretRef:
-            name: pspd-db
-        resources:
-          requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 300m
-            memory: 128Mi
+        - name: data
+          image: pspd/data:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 50052
+              name: grpc
+            - containerPort: 8000
+              name: metrics
+          envFrom:
+            - secretRef:
+                name: pspd-db
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "96Mi"
+            limits:
+              cpu: "300m"
+              memory: "192Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -101,9 +101,9 @@ spec:
   selector:
     app: data-service
   ports:
-  - name: grpc
-    port: 50052
-    targetPort: grpc
-  - name: metrics
-    port: 8000
-    targetPort: metrics
+    - name: grpc
+      port: 50052
+      targetPort: grpc
+    - name: metrics
+      port: 8000
+      targetPort: metrics

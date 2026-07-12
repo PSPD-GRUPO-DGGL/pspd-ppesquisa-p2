@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transform-service
+  namespace: grupo-9
+  labels:
+    app: transform-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transform-service
+  template:
+    metadata:
+      labels:
+        app: transform-service
+    spec:
+      containers:
+      - name: transform
+        image: seu-usuario-docker/pspd-transform:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 8000
+          name: metrics
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "300m"
+            memory: "128Mi"
+        env:
+        - name: ANON_SALT
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: ANON_SALT
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transform-service
+  namespace: grupo-9
+spec:
+  ports:
+  - port: 50051
+    targetPort: 50051
+    name: grpc
+  - port: 8000
+    targetPort: 8000
+    name: metrics
+  selector:
+    app: transform-service
