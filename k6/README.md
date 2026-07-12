@@ -2,13 +2,23 @@
 
 Quatro cenários k6, desenhados para produzir **contraste** em vez de confirmar que mais réplicas deixam tudo mais rápido.
 
-O k6 roda **fora do cluster**, como binário nativo no host, batendo no NodePort do Gateway. Um pod k6 agendado num worker roubaria CPU exatamente dos pods sob medição, e o enunciado exige "garantir as mesmas condições de teste de infraestrutura de modo a não contaminar os resultados".
+O k6 roda **fora dos pods da aplicação**. No ambiente final, deve bater na URL pública do grupo no cluster institucional. Um pod k6 agendado junto com os serviços roubaria CPU exatamente dos pods sob medição, e o enunciado exige "garantir as mesmas condições de teste de infraestrutura de modo a não contaminar os resultados".
 
 ## Rodar
 
 ```bash
-export GATEWAY=http://localhost:30080
-export KEYCLOAK=http://localhost:8080
+export GATEWAY=https://kiriland.unb.br/grupo9
+export KEYCLOAK=https://kiriland.unb.br/keycloak
+export REALM=grupo09
+export CLIENT_ID=<cliente-do-frontend>
+export K6_PASSWORD_MEDICO=<senha-fornecida-pelo-professor>
+export K6_PASSWORD_ESTAGIARIO=<senha-fornecida-pelo-professor>
+export K6_PASSWORD_PESQUISADOR=<senha-fornecida-pelo-professor>
+export K6_PROJECT=<projeto-aprovado-vigente>
+export K6_CONDITION=<condicao-do-projeto>
+export K6_MED_PATIENT=<paciente-vinculado-ao-medico>
+export K6_TRAINEE_PATIENT=<paciente-supervisionado>
+export K6_DENIED_PATIENT=<paciente-sem-vinculo-com-o-medico>
 
 k6 run k6/cenarios/a_medico_full.js
 
@@ -44,7 +54,17 @@ Os dois são do mesmo usuário, com o mesmo token, sob a mesma carga. O que muda
 
 ## Pré-requisitos
 
-Os cenários assumem o realm `hospital` no Keycloak, com os usuários `med.cardoso`, `est.pereira` e `pes.souza`, e as rotas do Gateway listadas em `comum.js`. Enquanto Auth, Data e Gateway não estiverem de pé, os scripts servem de especificação executável do contrato REST esperado.
+Os cenários finais assumem o realm institucional `grupo09` no Keycloak, com usuários informados pelo professor. As senhas entram por variável de ambiente; não versionar senha em `comum.js`, README, YAML ou relatório.
+
+Usuários padrão atuais em `comum.js`:
+
+| Perfil | Usuário |
+|---|---|
+| Médico | `med.cardoso` |
+| Estagiário | `est.ferreira` |
+| Pesquisador | `pes.mendes` |
+
+Depois da introspecção do banco `pseudopep_g09`, ajustar pacientes/projetos dos cenários para dados que existam no banco institucional. Enquanto Auth, Data e Gateway não estiverem de pé, os scripts servem de especificação executável do contrato REST esperado.
 
 Validar sintaxe sem subir nada:
 

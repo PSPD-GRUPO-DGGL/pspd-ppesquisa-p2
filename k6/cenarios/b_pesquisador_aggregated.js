@@ -10,7 +10,7 @@
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Trend } from 'k6/metrics';
-import { GATEWAY, DEGRAUS, cabecalhos, conferirBundle, obterToken } from '../comum.js';
+import { GATEWAY, DEGRAUS, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
 
 // O SLO de p95 < 500ms não se aplica a este caminho: a consulta sozinha custa
 // 154ms sem concorrência. O limiar aqui existe para registrar onde ele estoura.
@@ -29,8 +29,7 @@ export function setup() {
 }
 
 export default function (dados) {
-  // PRJ01: Diabetes, aprovado e vigente. Único que passa no AuthService.
-  const url = `${GATEWAY}/api/coortes/estatisticas?projeto=PRJ01&condicao=Diabetes`;
+  const url = `${GATEWAY}/api/coortes/estatisticas?projeto=${PROJETO_COORTE}&condicao=${CONDICAO_COORTE}`;
   const r = http.get(url, cabecalhos(dados.token, 'B_pesquisador_aggregated'));
 
   conferirBundle(r, 'MeasureReport');
