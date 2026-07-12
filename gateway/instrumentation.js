@@ -1,25 +1,24 @@
+// Rastreamento distribuído (OpenTelemetry), só traces. Desligado por padrão;
+// ligue com ENABLE_OTEL=true quando o Jaeger estiver no ar (Camada 3).
+// Precisa ser o primeiro require do processo para instrumentar as libs.
+if (process.env.ENABLE_OTEL !== 'true') {
+  module.exports = null;
+  return;
+}
+
 const { NodeSDK } = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { PrometheusExporter } = require('@opentelemetry/exporter-prometheus');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 
-// Configura o exportador do Prometheus (exigência do professor no item 'e')
-const prometheusExporter = new PrometheusExporter({
-  port: 9464, // Porta padrão do Prometheus exporter
-  endpoint: '/metrics',
-});
-
+// Endpoint vem de OTEL_EXPORTER_OTLP_ENDPOINT; sem coletor, o export só falha em silêncio.
 const sdk = new NodeSDK({
-  metricReader: prometheusExporter,
+  traceExporter: new OTLPTraceExporter(),
   instrumentations: [getNodeAutoInstrumentations()],
 });
 
 sdk.start();
+console.log('OpenTelemetry (traces) ativo.');
 
-console.log('📊 OpenTelemetry inicializado. Métricas expostas em http://localhost:9464/metrics');
+process.on('SIGTERM', () => sdk.shutdown().finally(() => process.exit(0)));
 
-// Trata o encerramento seguro
-process.on('SIGTERM', () => {
-  sdk.shutdown()
-    .then(() => console.log('OpenTelemetry encerrado'))
-    .finally(() => process.exit(0));
-});
+module.exports = sdk;

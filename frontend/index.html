@@ -1,113 +1,156 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>PseudoPEP - Grupo 09</title>
-    <!-- Adaptador oficial do Keycloak importado via CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px; 
-            max-width: 800px; 
-            margin: 0 auto;
-        }
-        h1 { color: #333; }
-        button { 
-            padding: 10px 15px; 
-            margin: 5px 0; 
-            cursor: pointer; 
-            background-color: #0056b3; 
-            color: white; 
-            border: none; 
-            border-radius: 4px;
-        }
-        button:hover { background-color: #004494; }
-        #logout-btn { background-color: #dc3545; }
-        #logout-btn:hover { background-color: #c82333; }
-        #resultado { 
-            background: #f4f4f4; 
-            padding: 15px; 
-            margin-top: 20px; 
-            border-radius: 5px; 
-            white-space: pre-wrap; 
-            border: 1px solid #ddd;
-            min-height: 100px;
-        }
-        .painel { padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: #fafafa; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PseudoPEP — Grupo 09</title>
+  <!-- Versão fixada para não descasar da versão do Keycloak do professor. -->
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@24.0.5/dist/keycloak.min.js"></script>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; padding: 20px; max-width: 860px; margin: 0 auto; color: #1a1a1a; }
+    h1 { font-size: 1.4rem; }
+    .painel { padding: 20px; border: 1px solid #ccc; border-radius: 8px; background: #fafafa; margin-top: 12px; }
+    .oculto { display: none; }
+    label { display: block; margin: 10px 0 4px; font-size: 0.9rem; font-weight: 600; }
+    input { padding: 8px; width: 260px; max-width: 100%; border: 1px solid #bbb; border-radius: 4px; }
+    button { padding: 9px 14px; margin: 8px 6px 0 0; cursor: pointer; background: #0056b3; color: #fff; border: 0; border-radius: 4px; }
+    button:hover { background: #004494; }
+    #logout-btn { background: #6c757d; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #0056b3; color: #fff; font-size: 0.8rem; }
+    #resultado { background: #f4f4f4; padding: 12px; margin-top: 16px; border-radius: 5px; border: 1px solid #ddd; }
+    #resumo { font-weight: 600; margin-bottom: 8px; }
+    pre { white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; margin: 0; font-size: 0.82rem; }
+    .erro { color: #b02a37; }
+  </style>
 </head>
 <body>
-    <h1>PseudoPEP - Sistema de Prontuários (Grupo 09)</h1>
-    
-    <!-- Tela mostrada antes do login -->
-    <div id="painel-deslogado" class="painel">
-        <h3>Acesso Restrito</h3>
-        <p>Por favor, faça o login no servidor da disciplina para acessar o sistema.</p>
-        <button onclick="login()">Entrar com Keycloak</button>
+  <h1>PseudoPEP — Prontuários do Hospital Universitário (Grupo 09)</h1>
+
+  <div id="painel-deslogado" class="painel">
+    <p>Faça login no Keycloak da disciplina para acessar o sistema.</p>
+    <button onclick="login()">Entrar com Keycloak</button>
+  </div>
+
+  <div id="painel-logado" class="painel oculto">
+    <p><span id="boas-vindas"></span> <span id="perfil-badge" class="badge"></span></p>
+
+    <div id="area-paciente" class="oculto">
+      <label for="pac">ID do paciente</label>
+      <input id="pac" placeholder="P090000002">
+      <div><button onclick="consultarPaciente()">Consultar prontuário</button></div>
     </div>
 
-    <!-- Tela mostrada após o login bem-sucedido -->
-    <div id="painel-logado" class="painel" style="display:none;">
-        <h3 id="boas-vindas"></h3>
-        <button onclick="buscarDados()">Consultar Prontuários</button>
-        <button id="logout-btn" onclick="logout()">Sair</button>
-        <div id="resultado">Os dados da orquestração (Auth -> Data -> Transform) aparecerão aqui...</div>
+    <div id="area-pesquisador" class="oculto">
+      <label for="projeto">Projeto</label>
+      <input id="projeto" value="PRJ01_G09">
+      <label for="condicao">Condição</label>
+      <input id="condicao" value="DIABETES">
+      <div>
+        <button onclick="consultarEstatisticas()">Estatísticas da coorte</button>
+        <button onclick="consultarExames()">Exames anonimizados</button>
+        <button onclick="consultarProjetos()">Meus projetos</button>
+      </div>
     </div>
 
-    <script>
-        // 1. Configuração apontando para o servidor OAUTH2 do Professor (Grupo 09)
-        const keycloak = new Keycloak({
-            url: 'https://kiriland.unb.br/keycloak',
-            realm: 'grupo09',
-            clientId: 'pseudopep' // <-- Alterado para o nome principal do projeto
+    <div><button id="logout-btn" onclick="logout()">Sair</button></div>
+
+    <div id="resultado">
+      <div id="resumo">A resposta do pipeline (Auth → Data → Transform) aparece aqui.</div>
+      <pre id="corpo"></pre>
+    </div>
+  </div>
+
+  <script>
+    // Ajuste estes valores ao ambiente. clientId DEVE ser o mesmo usado pelo k6/gateway.
+    const CONFIG = {
+      url: 'https://kiriland.unb.br/keycloak',
+      realm: 'grupo09',
+      clientId: 'frontend',
+      // Vazio = deriva da URL da página (mesma origem do gateway, atrás do Ingress).
+      // Em dev separado, aponte para o gateway, ex. 'http://localhost:3000/'.
+      apiBase: '',
+    };
+
+    // Diretório da página atual, com barra final: resolve a API sob qualquer prefixo.
+    function baseApi() { return CONFIG.apiBase || location.pathname.replace(/[^/]*$/, ''); }
+
+    const keycloak = new Keycloak({ url: CONFIG.url, realm: CONFIG.realm, clientId: CONFIG.clientId });
+
+    keycloak.init({ onLoad: 'check-sso', checkLoginIframe: false, pkceMethod: 'S256' })
+      .then((autenticado) => { if (autenticado) montarUI(); })
+      .catch(() => alert('Falha ao inicializar o Keycloak da UnB.'));
+
+    function login() { keycloak.login(); }
+    function logout() { keycloak.logout(); }
+
+    const PERFIS = ['MEDICO', 'ESTAGIARIO', 'PESQUISADOR'];
+    function resolverPerfil() {
+      const roles = (keycloak.tokenParsed.realm_access && keycloak.tokenParsed.realm_access.roles) || [];
+      const achado = roles.map((r) => r.toUpperCase()).find((r) => PERFIS.includes(r));
+      if (achado) return achado;
+      const u = keycloak.tokenParsed.preferred_username || '';
+      if (u.startsWith('med.')) return 'MEDICO';
+      if (u.startsWith('est.')) return 'ESTAGIARIO';
+      if (u.startsWith('pes.')) return 'PESQUISADOR';
+      return 'DESCONHECIDO';
+    }
+
+    function montarUI() {
+      document.getElementById('painel-deslogado').classList.add('oculto');
+      document.getElementById('painel-logado').classList.remove('oculto');
+      const perfil = resolverPerfil();
+      document.getElementById('boas-vindas').textContent = `Olá, ${keycloak.tokenParsed.preferred_username}.`;
+      document.getElementById('perfil-badge').textContent = perfil;
+      if (perfil === 'MEDICO' || perfil === 'ESTAGIARIO') {
+        document.getElementById('area-paciente').classList.remove('oculto');
+      } else if (perfil === 'PESQUISADOR') {
+        document.getElementById('area-pesquisador').classList.remove('oculto');
+      }
+    }
+
+    async function chamarGateway(caminho) {
+      const resumo = document.getElementById('resumo');
+      const corpo = document.getElementById('corpo');
+      resumo.className = '';
+      resumo.textContent = 'Consultando…';
+      corpo.textContent = '';
+      try {
+        await keycloak.updateToken(30); // renova se faltar <30s para expirar
+        const resp = await fetch(baseApi() + caminho, {
+          headers: { Authorization: `Bearer ${keycloak.token}` },
         });
-
-        // 2. Inicializa o Keycloak e desativa o iframe para evitar bloqueio do localhost
-        keycloak.init({ 
-            onLoad: 'check-sso',
-            checkLoginIframe: false 
-        }).then(function(authenticated) {
-            if (authenticated) {
-                // Se estiver autenticado, esconde a tela de login e mostra o painel
-                document.getElementById('painel-deslogado').style.display = 'none';
-                document.getElementById('painel-logado').style.display = 'block';
-                document.getElementById('boas-vindas').innerText = `Olá, ${keycloak.tokenParsed.preferred_username}!`;
-            }
-        }).catch(function() {
-            alert('Falha ao inicializar a comunicação com o Keycloak da UnB.');
-        });
-
-        // 3. Funções de Login e Logout que redirecionam para o servidor do professor
-        function login() { keycloak.login(); }
-        function logout() { keycloak.logout(); }
-
-        // 4. Bate no seu API Gateway enviando o Token JWT
-        function buscarDados() {
-            const painelResultado = document.getElementById('resultado');
-            painelResultado.innerText = "Buscando dados no pipeline gRPC...\nOrquestração: Gateway -> Auth -> Data -> Transform...";
-            
-            // Faz a requisição para o seu server.js (Gateway)
-            fetch('http://localhost:3000/api/consultar-dados', {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + keycloak.token
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erro HTTP: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                // Imprime o JSON formatado bonitinho na tela
-                painelResultado.innerText = JSON.stringify(data, null, 2);
-            })
-            .catch(error => {
-                painelResultado.innerText = 'Erro na comunicação com o API Gateway (localhost:3000):\n' + error.message;
-            });
+        const texto = await resp.text();
+        let json;
+        try { json = JSON.parse(texto); } catch (_) { json = texto; }
+        if (!resp.ok) {
+          resumo.className = 'erro';
+          resumo.textContent = `HTTP ${resp.status}` + (json && json.motivo ? ` — ${json.motivo}` : '');
+          corpo.textContent = typeof json === 'string' ? json : JSON.stringify(json, null, 2);
+          return;
         }
-    </script>
+        const tipo = json.resourceType || 'resposta';
+        const n = Array.isArray(json.entry) ? ` — ${json.entry.length} recursos` : '';
+        resumo.textContent = `${tipo}${n}`;
+        corpo.textContent = JSON.stringify(json, null, 2);
+      } catch (err) {
+        resumo.className = 'erro';
+        resumo.textContent = 'Falha ao comunicar com o Gateway: ' + err.message;
+      }
+    }
+
+    function consultarPaciente() {
+      const id = document.getElementById('pac').value.trim();
+      if (!id) return alert('Informe o ID do paciente.');
+      chamarGateway(`api/pacientes/${encodeURIComponent(id)}/resumo-clinico`);
+    }
+    function paramsCoorte() {
+      const p = encodeURIComponent(document.getElementById('projeto').value.trim());
+      const c = encodeURIComponent(document.getElementById('condicao').value.trim());
+      return `projeto=${p}&condicao=${c}`;
+    }
+    function consultarEstatisticas() { chamarGateway(`api/coortes/estatisticas?${paramsCoorte()}`); }
+    function consultarExames() { chamarGateway(`api/coortes/exames?${paramsCoorte()}&limite=100`); }
+    function consultarProjetos() { chamarGateway('api/projetos'); }
+  </script>
 </body>
 </html>
