@@ -2,98 +2,112 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prontuário Eletrônico - Hospital Universitário</title>
-    <script src="https://cdn.jsdelivr.net/npm/keycloak-js@21.1.1/dist/keycloak.min.js"></script>
+    <title>PseudoPEP - Grupo 09</title>
+    <!-- Adaptador oficial do Keycloak importado via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        button { padding: 10px 15px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
-        .btn-test { background: #28a745; }
-        pre { background: #333; color: #0f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
-        .hidden { display: none; }
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 800px; 
+            margin: 0 auto;
+        }
+        h1 { color: #333; }
+        button { 
+            padding: 10px 15px; 
+            margin: 5px 0; 
+            cursor: pointer; 
+            background-color: #0056b3; 
+            color: white; 
+            border: none; 
+            border-radius: 4px;
+        }
+        button:hover { background-color: #004494; }
+        #logout-btn { background-color: #dc3545; }
+        #logout-btn:hover { background-color: #c82333; }
+        #resultado { 
+            background: #f4f4f4; 
+            padding: 15px; 
+            margin-top: 20px; 
+            border-radius: 5px; 
+            white-space: pre-wrap; 
+            border: 1px solid #ddd;
+            min-height: 100px;
+        }
+        .painel { padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: #fafafa; }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <h2>Sistema de Prontuário (HL7/FHIR)</h2>
+    <h1>PseudoPEP - Sistema de Prontuários (Grupo 09)</h1>
     
-    <div id="login-section">
-        <p>Você não está autenticado.</p>
-        <button onclick="login()">Login via Keycloak</button>
-        <button onclick="mockLogin()" class="btn-test">Login de Teste (Sem Keycloak)</button>
+    <!-- Tela mostrada antes do login -->
+    <div id="painel-deslogado" class="painel">
+        <h3>Acesso Restrito</h3>
+        <p>Por favor, faça o login no servidor da disciplina para acessar o sistema.</p>
+        <button onclick="login()">Entrar com Keycloak</button>
     </div>
 
-    <div id="app-section" class="hidden">
-        <p>Bem-vindo, <strong id="username"></strong>! Nível: <strong id="user-role"></strong></p>
-        <button onclick="logout()">Sair</button>
-        <hr>
-        
-        <h3>Consultar Paciente</h3>
-        <input type="text" id="patient-id" value="P000001" placeholder="ID do Paciente">
-        <button onclick="fetchPatientData()">Buscar Prontuário</button>
-        
-        <h4>Resposta do API Gateway:</h4>
-        <pre id="json-result">Aguardando requisição...</pre>
+    <!-- Tela mostrada após o login bem-sucedido -->
+    <div id="painel-logado" class="painel" style="display:none;">
+        <h3 id="boas-vindas"></h3>
+        <button onclick="buscarDados()">Consultar Prontuários</button>
+        <button id="logout-btn" onclick="logout()">Sair</button>
+        <div id="resultado">Os dados da orquestração (Auth -> Data -> Transform) aparecerão aqui...</div>
     </div>
-</div>
 
-<script>
-    const keycloak = new Keycloak({
-        url: 'http://localhost:8080',
-        realm: 'hospital',
-        clientId: 'frontend-app'
-    });
+    <script>
+        // 1. Configuração apontando para o servidor OAUTH2 do Professor (Grupo 09)
+        const keycloak = new Keycloak({
+            url: 'https://kiriland.unb.br/keycloak',
+            realm: 'grupo09',
+            clientId: 'pseudopep' // <-- Alterado para o nome principal do projeto
+        });
 
-    function initKeycloak() {
-        keycloak.init({ onLoad: 'check-sso' }).then(authenticated => {
+        // 2. Inicializa o Keycloak e desativa o iframe para evitar bloqueio do localhost
+        keycloak.init({ 
+            onLoad: 'check-sso',
+            checkLoginIframe: false 
+        }).then(function(authenticated) {
             if (authenticated) {
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('app-section').classList.remove('hidden');
-                document.getElementById('username').innerText = keycloak.tokenParsed.preferred_username;
-                const roles = keycloak.tokenParsed.realm_access?.roles || [];
-                document.getElementById('user-role').innerText = roles.join(', ');
+                // Se estiver autenticado, esconde a tela de login e mostra o painel
+                document.getElementById('painel-deslogado').style.display = 'none';
+                document.getElementById('painel-logado').style.display = 'block';
+                document.getElementById('boas-vindas').innerText = `Olá, ${keycloak.tokenParsed.preferred_username}!`;
             }
-        }).catch(err => console.error("Erro ao inicializar Keycloak", err));
-    }
+        }).catch(function() {
+            alert('Falha ao inicializar a comunicação com o Keycloak da UnB.');
+        });
 
-    function login() { keycloak.login(); }
-    function logout() { keycloak.logout(); }
+        // 3. Funções de Login e Logout que redirecionam para o servidor do professor
+        function login() { keycloak.login(); }
+        function logout() { keycloak.logout(); }
 
-    // Simula o comportamento do Keycloak para testar a API isoladamente
-    function mockLogin() {
-        document.getElementById('login-section').classList.add('hidden');
-        document.getElementById('app-section').classList.remove('hidden');
-        document.getElementById('username').innerText = "Dev_User (Simulado)";
-        document.getElementById('user-role').innerText = "MEDICO";
-        keycloak.token = "token-falso-para-teste"; 
-    }
-
-    async function fetchPatientData() {
-        const patientId = document.getElementById('patient-id').value;
-        const resultBox = document.getElementById('json-result');
-        resultBox.innerText = "Carregando...";
-
-        try {
-            const response = await fetch(`http://localhost:3000/api/patients/${patientId}`, {
+        // 4. Bate no seu API Gateway enviando o Token JWT
+        function buscarDados() {
+            const painelResultado = document.getElementById('resultado');
+            painelResultado.innerText = "Buscando dados no pipeline gRPC...\nOrquestração: Gateway -> Auth -> Data -> Transform...";
+            
+            // Faz a requisição para o seu server.js (Gateway)
+            fetch('http://localhost:3000/api/consultar-dados', {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${keycloak.token}`,
-                    'Content-Type': 'application/json'
+                    'Authorization': 'Bearer ' + keycloak.token
                 }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Imprime o JSON formatado bonitinho na tela
+                painelResultado.innerText = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                painelResultado.innerText = 'Erro na comunicação com o API Gateway (localhost:3000):\n' + error.message;
             });
-
-            const data = await response.json();
-            resultBox.innerText = JSON.stringify(data, null, 2);
-            
-        } catch (error) {
-            resultBox.innerText = `Erro na requisição: ${error.message}`;
         }
-    }
-
-    window.onload = initKeycloak;
-</script>
-
+    </script>
 </body>
 </html>
