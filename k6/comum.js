@@ -1,6 +1,11 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
+// 403 é decisão de autorização legítima (caminho DENY da carga mista), não falha.
+// Sem isto, os denies intencionais inflam http_req_failed e estouram o threshold de
+// erro em todo experimento. Contamos como falha só 5xx/401/timeout (erro de verdade).
+http.setResponseCallback(http.expectedStatuses(200, 403));
+
 export const GATEWAY = __ENV.GATEWAY || 'https://kiriland.unb.br/grupo9';
 export const KEYCLOAK = __ENV.KEYCLOAK || 'https://kiriland.unb.br/keycloak';
 export const REALM = __ENV.REALM || 'grupo09';
