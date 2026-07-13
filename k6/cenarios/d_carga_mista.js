@@ -5,7 +5,7 @@ import http from 'k6/http';
 import { Counter, Trend } from 'k6/metrics';
 import {
   GATEWAY,
-  DEGRAUS,
+  CARGA,
   PROJETO_COORTE,
   CONDICAO_COORTE,
   PACIENTE_MEDICO,
@@ -17,7 +17,7 @@ import {
 } from '../comum.js';
 
 export const options = {
-  scenarios: { d_carga_mista: DEGRAUS },
+  scenarios: { d_carga_mista: CARGA },
   thresholds: {
     http_req_failed: [{ threshold: 'rate<0.02', abortOnFail: false }],
     'http_req_duration{name:D_medico_full}': [{ threshold: 'p(95)<500', abortOnFail: false }],

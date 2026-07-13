@@ -11,10 +11,10 @@
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Trend } from 'k6/metrics';
-import { GATEWAY, DEGRAUS, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
+import { GATEWAY, CARGA, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
 
 export const options = {
-  scenarios: { c_pesquisador_anonymized: DEGRAUS },
+  scenarios: { c_pesquisador_anonymized: CARGA },
   thresholds: {
     http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: false }],
     http_req_duration: [{ threshold: 'p(95)<2000', abortOnFail: false }],

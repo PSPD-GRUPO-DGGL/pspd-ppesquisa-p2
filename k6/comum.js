@@ -4,7 +4,7 @@ import { check } from 'k6';
 export const GATEWAY = __ENV.GATEWAY || 'https://kiriland.unb.br/grupo9';
 export const KEYCLOAK = __ENV.KEYCLOAK || 'https://kiriland.unb.br/keycloak';
 export const REALM = __ENV.REALM || 'grupo09';
-export const CLIENT_ID = __ENV.CLIENT_ID || 'frontend';
+export const CLIENT_ID = __ENV.CLIENT_ID || 'pseudopep-frontend';
 export const PROJETO_COORTE = __ENV.K6_PROJECT || 'PRJ01';
 export const CONDICAO_COORTE = __ENV.K6_CONDITION || 'DIABETES';
 export const PACIENTE_MEDICO = __ENV.K6_MED_PATIENT || '';
@@ -87,6 +87,17 @@ export const DEGRAUS = {
   ],
   gracefulRampDown: '30s',
 };
+
+// Executor selecionável: se K6_VUS estiver definido, roda carga CONSTANTE naquele
+// nível (para tabela por nível de VU do relatório); senão, faz a rampa DEGRAUS
+// (para a curva de saturação e a fase de autoscaling).
+export const CARGA = __ENV.K6_VUS
+  ? {
+      executor: 'constant-vus',
+      vus: Number(__ENV.K6_VUS),
+      duration: __ENV.K6_DURATION || '60s',
+    }
+  : DEGRAUS;
 
 // abortOnFail:false — violar o limiar nos degraus altos é esperado, não motivo de abortar.
 export const LIMIARES = {

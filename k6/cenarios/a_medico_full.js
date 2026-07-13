@@ -7,9 +7,9 @@
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Trend } from 'k6/metrics';
-import { GATEWAY, DEGRAUS, LIMIARES, PACIENTE_MEDICO, cabecalhos, conferirBundle, obterToken } from '../comum.js';
+import { GATEWAY, CARGA, LIMIARES, PACIENTE_MEDICO, cabecalhos, conferirBundle, obterToken } from '../comum.js';
 
-export const options = { scenarios: { a_medico_full: DEGRAUS }, thresholds: LIMIARES };
+export const options = { scenarios: { a_medico_full: CARGA }, thresholds: LIMIARES };
 
 const duracaoFull = new Trend('cenario_a_duracao_ms', true);
 

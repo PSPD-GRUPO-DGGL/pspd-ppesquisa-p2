@@ -10,12 +10,12 @@
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Trend } from 'k6/metrics';
-import { GATEWAY, DEGRAUS, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
+import { GATEWAY, CARGA, PROJETO_COORTE, CONDICAO_COORTE, cabecalhos, conferirBundle, obterToken } from '../comum.js';
 
 // O SLO de p95 < 500ms não se aplica a este caminho: a consulta sozinha custa
 // 154ms sem concorrência. O limiar aqui existe para registrar onde ele estoura.
 export const options = {
-  scenarios: { b_pesquisador_aggregated: DEGRAUS },
+  scenarios: { b_pesquisador_aggregated: CARGA },
   thresholds: {
     http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: false }],
     http_req_duration: [{ threshold: 'p(95)<3000', abortOnFail: false }],
