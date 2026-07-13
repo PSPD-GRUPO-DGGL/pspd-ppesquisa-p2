@@ -1,0 +1,168 @@
+# Prometheus enxuto DENTRO do namespace grupo-9 (Opção B).
+# Raspa apenas os 4 serviços da app via kubernetes_sd (role: pod), restrito a este
+# namespace — compatível com o RBAC namespace-scoped (não acessa nós/cAdvisor).
+# CPU/memória por pod saem tanto do metrics-server (kubectl top) quanto das métricas
+# de processo que o próprio app expõe (process_cpu_seconds_total / _resident_memory_bytes).
+# Footprint deliberadamente pequeno para não roubar cota dos experimentos de escala:
+# requests 100m/256Mi, limits 300m/512Mi (~3% da cota de requests.cpu, ~6% de mem).
+# Grafana fica FORA do cluster (na máquina do Gabriel), lendo este Prometheus por
+# `kubectl port-forward svc/prometheus 9090` — custo zero de cota.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: grupo-9
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-sd
+  namespace: grupo-9
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-sd
+  namespace: grupo-9
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-sd
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: grupo-9
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: grupo-9
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+    scrape_configs:
+      # Serviços Python (auth/data/transform): métricas em :8000 (porta 'metrics')
+      - job_name: pspd-python
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [grupo-9]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: auth-service|data-service|transform-service
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+      # Gateway Node: métricas em :3000/metrics (porta 'http')
+      - job_name: pspd-gateway
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [grupo-9]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: api-gateway
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: http
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: grupo-9
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.2
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+              name: web
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+            initialDelaySeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: grupo-9
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web
