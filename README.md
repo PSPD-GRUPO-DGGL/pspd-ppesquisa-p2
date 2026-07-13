@@ -10,16 +10,16 @@ Disciplina PSPD (T02), Prof. Fernando William Cruz, UnB/FGA. Grupo DGGL.
 
 As orientações novas do professor sobre cluster, banco, Keycloak e Grafana prevalecem sobre instruções antigas deste repositório quando houver conflito.
 
-| Item | Valor |
-|---|---|
-| Cluster | K8S da disciplina em `kiriland.unb.br` |
-| Namespace | `grupo-9` |
-| Kubeconfig | `../kubeconfig-grupo-9.yaml` fora do git |
-| URL pública | `https://kiriland.unb.br/grupo9` |
-| Banco | `pseudopep_g09` |
-| Keycloak | `https://kiriland.unb.br/keycloak`, realm `grupo09` |
-| Grafana | Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), lido via `kubectl port-forward svc/prometheus 9090` + Grafana local. Integração com `https://grafana.kiriland.unb.br` (institucional) não confirmada. |
-| Registry de imagens | `docker.io/sanjos3` (`pspd-auth`, `pspd-data`, `pspd-transform`, `pspd-gateway`, tag `0.1.0`) |
+| Item                | Valor                                                                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cluster             | K8S da disciplina em `kiriland.unb.br`                                                                                                                                                                             |
+| Namespace           | `grupo-9`                                                                                                                                                                                                          |
+| Kubeconfig          | `../kubeconfig-grupo-9.yaml` fora do git                                                                                                                                                                           |
+| URL pública         | `https://kiriland.unb.br/grupo9`                                                                                                                                                                                   |
+| Banco               | `pseudopep_g09`                                                                                                                                                                                                    |
+| Keycloak            | `https://kiriland.unb.br/keycloak`, realm `grupo09`                                                                                                                                                                |
+| Grafana             | Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), lido via `kubectl port-forward svc/prometheus 9090` + Grafana local. Integração com `https://grafana.kiriland.unb.br` (institucional) não confirmada. |
+| Registry de imagens | `docker.io/sanjos3` (`pspd-auth`, `pspd-data`, `pspd-transform`, `pspd-gateway`, tag `0.1.0`)                                                                                                                      |
 
 Segredos não devem ser versionados. Senhas de banco, tokens, kubeconfig, senha SSH e `ANON_SALT` devem entrar via `Secret` ou variável local.
 
@@ -39,44 +39,44 @@ O Gateway valida o JWT contra o JWKS do Keycloak e orquestra um pipeline sequenc
 
 ## O que já está pronto
 
-| Artefato | Onde | Verificado por |
-|---|---|---|
-| Contratos gRPC (4 arquivos proto3) | `proto/` | compilam com `grpc_tools.protoc` |
-| Schema das 5 tabelas | `db/schema/01_schema.sql` | carrega em Postgres 16 |
-| Seed sintético determinístico | `db/seed/02_seed.sql` | 50k pacientes, 1,27M eventos, 27s |
-| Índices e sua justificativa | `db/schema/03_indices.sql` | `EXPLAIN ANALYZE` (ver abaixo) |
-| Matriz de nível de acesso | `docs/matriz-acesso.md` | — (normativo) |
-| Mapeamento relacional → FHIR | `docs/mapeamento-fhir.md` | — (normativo) |
-| **Data Transform Service** | `servicos/transform/` | 52 testes + smoke gRPC + container |
-| **Authorization Service** | `servicos/auth/` | validado nos 4 fluxos contra o banco real |
-| **Patient Data Service** | `servicos/data/` | validado contra `pseudopep_g09`, tradução inglês→PT |
-| **API Gateway** (Node/Express) | `gateway/` | JWKS RS256, pipeline sequencial, deployado |
-| **Frontend** (Keycloak-js) | `frontend/` | UI por perfil, servido pelo próprio Gateway |
-| **Chat `epoll` + experimento C10K** | `chat/` | 3 servidores em C, medidos até 10k conexões |
-| **Cenários de carga k6** | `k6/` | 4 cenários, executados no cluster real |
-| **Manifests do `grupo-9`** | `k8s/app/` | deployados; 4 serviços `Running` |
-| **Prometheus próprio** | `k8s/app/prometheus.yaml` | 4 targets `up`, coletando |
-| **Matriz de experimentos E0–E5** | `scripts/exp_runner.sh`, `resultados/` | executada por completo no cluster real |
+| Artefato                            | Onde                                   | Verificado por                                      |
+| ----------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| Contratos gRPC (4 arquivos proto3)  | `proto/`                               | compilam com `grpc_tools.protoc`                    |
+| Schema das 5 tabelas                | `db/schema/01_schema.sql`              | carrega em Postgres 16                              |
+| Seed sintético determinístico       | `db/seed/02_seed.sql`                  | 50k pacientes, 1,27M eventos, 27s                   |
+| Índices e sua justificativa         | `db/schema/03_indices.sql`             | `EXPLAIN ANALYZE` (ver abaixo)                      |
+| Matriz de nível de acesso           | `docs/matriz-acesso.md`                | — (normativo)                                       |
+| Mapeamento relacional → FHIR        | `docs/mapeamento-fhir.md`              | — (normativo)                                       |
+| **Data Transform Service**          | `servicos/transform/`                  | 52 testes + smoke gRPC + container                  |
+| **Authorization Service**           | `servicos/auth/`                       | validado nos 4 fluxos contra o banco real           |
+| **Patient Data Service**            | `servicos/data/`                       | validado contra `pseudopep_g09`, tradução inglês→PT |
+| **API Gateway** (Node/Express)      | `gateway/`                             | JWKS RS256, pipeline sequencial, deployado          |
+| **Frontend** (Keycloak-js)          | `frontend/`                            | UI por perfil, servido pelo próprio Gateway         |
+| **Chat `epoll` + experimento C10K** | `chat/`                                | 3 servidores em C, medidos até 10k conexões         |
+| **Cenários de carga k6**            | `k6/`                                  | 4 cenários, executados no cluster real              |
+| **Manifests do `grupo-9`**          | `k8s/app/`                             | deployados; 4 serviços `Running`                    |
+| **Prometheus próprio**              | `k8s/app/prometheus.yaml`              | 4 targets `up`, coletando                           |
+| **Matriz de experimentos E0–E5**    | `scripts/exp_runner.sh`, `resultados/` | executada por completo no cluster real              |
 
 ## Resultados finais no cluster real
 
 Validação funcional (fase a): os quatro níveis de acesso, testados pela URL pública.
 
-| Nível | Usuário | Resultado |
-|---|---|---|
-| FULL | `med.cardoso` → `P090000002` | `200`, Bundle FHIR |
-| DENY | `med.cardoso` → `P090000001` (sem vínculo) | `403`, `sem_vinculo_ativo` |
-| PARTIAL | `est.ferreira` → `P090000030` | `200`, Bundle FHIR |
-| AGGREGATED | `pes.mendes` → `PRJ01_G09`/DIABETES | `200`, `MeasureReport` FHIR |
+| Nível      | Usuário                                    | Resultado                   |
+| ---------- | ------------------------------------------ | --------------------------- |
+| FULL       | `med.cardoso` → `P090000002`               | `200`, Bundle FHIR          |
+| DENY       | `med.cardoso` → `P090000001` (sem vínculo) | `403`, `sem_vinculo_ativo`  |
+| PARTIAL    | `est.ferreira` → `P090000030`              | `200`, Bundle FHIR          |
+| AGGREGATED | `pes.mendes` → `PRJ01_G09`/DIABETES        | `200`, `MeasureReport` FHIR |
 
 Matriz de carga (fases b a d): throughput e erro real a 1000 VUs sustentados, por configuração de réplicas.
 
-| Config. | Throughput | p95 | Erro real |
-|---|---|---|---|
-| E0 (1 réplica cada, baseline) | 35,95 rps | 21.715 ms | 10,44% |
-| E2 (Transform×3) | 40,73 rps | 19.266 ms | 9,62% |
-| E3 (Data×3) | 38,25 rps | 21.272 ms | 9,87% |
-| E4 (todos×3) | **48,69 rps** | **12.511 ms** | **6,73%** |
+| Config.                       | Throughput    | p95           | Erro real |
+| ----------------------------- | ------------- | ------------- | --------- |
+| E0 (1 réplica cada, baseline) | 35,95 rps     | 21.715 ms     | 10,44%    |
+| E2 (Transform×3)              | 40,73 rps     | 19.266 ms     | 9,62%     |
+| E3 (Data×3)                   | 38,25 rps     | 21.272 ms     | 9,87%     |
+| E4 (todos×3)                  | **48,69 rps** | **12.511 ms** | **6,73%** |
 
 A CPU nunca satura em nenhum experimento, sempre abaixo de 15% da cota. O gargalo está distribuído pela cadeia de chamadas sequenciais (Gateway, Auth, Data, Transform) e no PostgreSQL compartilhado entre os 10 grupos da disciplina, não concentrado num serviço. Escalar Transform ou Data isoladamente ajuda pouco; só escalar todos os serviços juntos (E4) produz ganho substancial. O HPA (E5) escalou de 1 para 12 pods em cerca de 3 minutos e parou, com o motivo explícito `"All metrics below target"`, sinal de que a métrica que ele observa já estava satisfeita, não de falta de capacidade do cluster. Análise completa em `docs/relatorio-final.md`.
 
@@ -84,10 +84,10 @@ A CPU nunca satura em nenhum experimento, sempre abaixo de 15% da cota. O gargal
 
 Os índices são projetados para que os dois caminhos custem coisas diferentes. Medido em Postgres 16, 50k pacientes:
 
-| Caminho | Tempo | Plano |
-|---|---|---|
-| FULL (prontuário de 1 paciente) | **0,25 ms** | index scan puro |
-| AGGREGATED (coorte Diabetes) | **154,6 ms** | parallel seq scan de 961k linhas + sort externo em disco |
+| Caminho                         | Tempo        | Plano                                                    |
+| ------------------------------- | ------------ | -------------------------------------------------------- |
+| FULL (prontuário de 1 paciente) | **0,25 ms**  | index scan puro                                          |
+| AGGREGATED (coorte Diabetes)    | **154,6 ms** | parallel seq scan de 961k linhas + sort externo em disco |
 
 Fator de ~620×. A coorte em si é resolvida por índice, barato de propósito. O custo está na agregação, e esse contraste permite testar a hipótese central do trabalho: escala horizontal ajuda serviço stateless compute-bound, mas não resolve um banco compartilhado.
 
@@ -95,11 +95,11 @@ Fator de ~620×. A coorte em si é resolvida por índice, barato de propósito. 
 
 Três servidores de chat com o mesmo protocolo, 10 mil conexões e 1% ativas (`docs/experimento-c10k.md`):
 
-| | memória por conexão | msgs por segundo de CPU | conexões aceitas |
-|---|---|---|---|
-| `epoll` | **4,2 KB** | **273.238** | 10.000 |
-| thread-por-conexão | 12,4 KB | 75.603 | 10.000 |
-| `select()` | — | — | **1.020** (teto do `FD_SETSIZE`) |
+|                    | memória por conexão | msgs por segundo de CPU | conexões aceitas                 |
+| ------------------ | ------------------- | ----------------------- | -------------------------------- |
+| `epoll`            | **4,2 KB**          | **273.238**             | 10.000                           |
+| thread-por-conexão | 12,4 KB             | 75.603                  | 10.000                           |
+| `select()`         | —                   | —                       | **1.020** (teto do `FD_SETSIZE`) |
 
 O `epoll` mantém a mesma eficiência com mil ou dez mil conexões, a propriedade O(1) medida. O `select()` não é lento, é impossível: `fd_set` tem 1024 bits, e o limite é da libc, não do programa.
 
@@ -339,16 +339,20 @@ Esse script prepara as VMs via Multipass, configura o container runtime `contain
 
 A alocação segue afinidade com o T1 e **grau de dependência**: quem depende de menos gente fica com o que pode ser terminado primeiro.
 
-| Integrante | Responsabilidade | Estado |
-|---|---|---|
-| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · **API Gateway + frontend** (reescrita) · **manifests do `grupo-9`, deploy, Prometheus** · **matriz de experimentos E0–E5** · estrutura do relatório | ✅ entregue e validado no cluster real |
-| **Danilo Carvalho Antunes** | Introspecção do banco institucional · **Authorization Service** · **Patient Data Service**, validados nos 4 fluxos contra o banco real · configuração segura de banco | ✅ entregue; experimento pgbouncer planejado (não implementado no `grupo-9`) |
-| **Guilherme Brito de Souza** | Gateway/frontend iniciais (contratos não batiam com os serviços reais; substituídos pela reescrita) | 🟡 ver comentário pessoal no relatório |
-| **Luiz Gustavo Lopes Campos** | Infra de laboratório local (`mocks.yaml`, `kind-config`, `run_load_tests.sh`) · manifests iniciais no `grupo-9` (reconciliados) | 🟡 ver comentário pessoal no relatório |
+| Integrante                    | Responsabilidade                                                                                                                                                                                                                                                                              | Estado     |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **Gabriel Soares dos Anjos**  | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · **API Gateway + frontend** (reescrita) · **manifests do `grupo-9`, deploy, Prometheus** · **matriz de experimentos E0–E5** · estrutura do relatório | ✅ entregue |
+| **Danilo Carvalho Antunes**   | Introspecção do banco institucional · **Authorization Service** · **Patient Data Service**, validados nos 4 fluxos contra o banco real · configuração segura de banco                                                                                                                         | ✅ entregue |
+| **Guilherme Brito de Souza**  | Versão inicial do Gateway/frontend, integrada à reescrita final com os contratos reais dos serviços                                                                                                                                                                                           | ✅ entregue |
+| **Luiz Gustavo Lopes Campos** | Infra de laboratório local (`mocks.yaml`, `kind-config`, `run_load_tests.sh`) · manifests iniciais no `grupo-9`, integrados durante a reconciliação do time                                                                                                                                   | ✅ entregue |
 
 O plano completo, com a atualização normativa do cluster institucional, está em `docs/PLANO.md`. O plano da parte do Danilo está em `docs/plano-implementacao-danilo.md`. Autoavaliação individual de cada membro em `docs/relatorio-final.md`, Seção 5.
 
-### Para quem vai implementar um serviço
+## Vídeo de apresentação
+
+ Os vídeos individuais já gravados estão disponíveis nesta pasta do Google Drive: https://drive.google.com/drive/folders/1AWmjym2miixPmquB6PLKKbgApo0SdgcH
+
+## Para quem vai implementar um serviço
 
 Os contratos em `proto/` são a fonte de verdade e já compilam. Gere seus stubs com `./scripts/gen_protos.sh` e code contra eles. Três coisas que o contrato já decide por você:
 
