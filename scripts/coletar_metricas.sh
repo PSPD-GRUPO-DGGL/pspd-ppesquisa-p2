@@ -16,8 +16,10 @@ if [ ! -f "$CSV" ]; then
 fi
 
 # --- métricas de carga, do resumo do k6 ---
-# O --summary-export do k6 envolve cada métrica em {"type":…, "values":{…}}.
-# Bug original: o parser não descia em ["values"], lendo sempre o default 0.
+# O formato do --summary-export varia entre versões do k6:
+#   - Versões mais novas: m[metric]["values"][sub]  (com envelope type/contains/values)
+#   - Versão da VM:       m[metric][sub]            (flat, sem envelope)
+# O parser tenta "values" primeiro; se não existir, acessa direto.
 read -r TP AVG P95 P99 ERR < <(python3 - "$SUMMARY" <<'PY'
 import json, sys
 try:
@@ -25,12 +27,15 @@ try:
 except Exception:
     print("0 0 0 0 0"); sys.exit()
 def g(metric, sub, d=0.0):
-    return float(m.get(metric, {}).get("values", {}).get(sub, d))
+    entry = m.get(metric, {})
+    if "values" in entry:
+        entry = entry["values"]
+    return float(entry.get(sub, d))
 tp  = g("http_reqs", "rate")
 avg = g("http_req_duration", "avg")
 p95 = g("http_req_duration", "p(95)")
 p99 = g("http_req_duration", "p(99)")
-err = g("http_req_failed", "rate")   # taxa de falha (0..1); campo "rate" dentro de "values"
+err = g("http_req_failed", "rate")   # taxa de falha (0..1)
 print(f"{tp:.2f} {avg:.2f} {p95:.2f} {p99:.2f} {err:.4f}")
 PY
 )

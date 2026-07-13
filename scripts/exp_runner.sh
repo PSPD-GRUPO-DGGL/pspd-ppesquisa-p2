@@ -55,9 +55,9 @@ roda_niveis() { # $1=nome do experimento — carga CONSTANTE por nível de VU
   for v in $VUS_LIST; do
     echo ">> [$exp] k6 constante VUs=$v (${DURATION})"
     K6_VUS=$v K6_DURATION=$DURATION k6 run --summary-export="$OUT/${exp}_vus${v}.json" "$SCRIPT" || true
-    local linhas_antes; linhas_antes=$(wc -l < "$OUT/matriz.csv" 2>/dev/null || echo 0)
+    local linhas_antes; linhas_antes=$([ -f "$OUT/matriz.csv" ] && wc -l < "$OUT/matriz.csv" || echo 0)
     bash "$RAIZ/scripts/coletar_metricas.sh" "$exp" "$v" "$OUT/${exp}_vus${v}.json" "$OUT/matriz.csv"
-    local linhas_depois; linhas_depois=$(wc -l < "$OUT/matriz.csv" 2>/dev/null || echo 0)
+    local linhas_depois; linhas_depois=$(wc -l < "$OUT/matriz.csv")
     if [ "$linhas_depois" -le "$linhas_antes" ]; then
       echo "AVISO: coletor NÃO adicionou linha ao CSV (verifique $OUT/${exp}_vus${v}.json)" >&2
     fi
