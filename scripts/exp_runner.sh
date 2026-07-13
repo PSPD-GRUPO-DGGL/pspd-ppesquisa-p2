@@ -54,7 +54,7 @@ roda_niveis() { # $1=nome do experimento — carga CONSTANTE por nível de VU
   local exp=$1 v
   for v in $VUS_LIST; do
     echo ">> [$exp] k6 constante VUs=$v (${DURATION})"
-    K6_VUS=$v K6_DURATION=$DURATION k6 run --summary-export="$OUT/${exp}_vus${v}.json" "$SCRIPT" || true
+    K6_VUS=$v K6_DURATION=$DURATION k6 run --summary-trend-stats="min,avg,med,max,p(90),p(95),p(99)" --summary-export="$OUT/${exp}_vus${v}.json" "$SCRIPT" || true
     local linhas_antes; linhas_antes=$([ -f "$OUT/matriz.csv" ] && wc -l < "$OUT/matriz.csv" || echo 0)
     bash "$RAIZ/scripts/coletar_metricas.sh" "$exp" "$v" "$OUT/${exp}_vus${v}.json" "$OUT/matriz.csv"
     local linhas_depois; linhas_depois=$(wc -l < "$OUT/matriz.csv")
@@ -71,7 +71,7 @@ roda_rampa_hpa() { # $1=nome — rampa 10->1000 com HPA ligado, amostrando pods
       sleep 10
     done ) & local sampler=$!
   echo ">> [$exp] k6 RAMPA 10->1000 com HPA (amostrando pods a cada 10s)"
-  k6 run --summary-export="$OUT/${exp}_summary.json" "$SCRIPT" || true
+  k6 run --summary-trend-stats="min,avg,med,max,p(90),p(95),p(99)" --summary-export="$OUT/${exp}_summary.json" "$SCRIPT" || true
   kill "$sampler" 2>/dev/null || true
 }
 

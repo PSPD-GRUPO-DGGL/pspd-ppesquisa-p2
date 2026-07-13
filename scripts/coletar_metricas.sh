@@ -35,7 +35,11 @@ tp  = g("http_reqs", "rate")
 avg = g("http_req_duration", "avg")
 p95 = g("http_req_duration", "p(95)")
 p99 = g("http_req_duration", "p(99)")
-err = g("http_req_failed", "rate")   # taxa de falha (0..1)
+# http_req_failed é tipo Rate: flat usa "value", envelope usa "rate"
+entry_err = m.get("http_req_failed", {})
+if "values" in entry_err:
+    entry_err = entry_err["values"]
+err = float(entry_err.get("rate", entry_err.get("value", 0.0)))
 print(f"{tp:.2f} {avg:.2f} {p95:.2f} {p99:.2f} {err:.4f}")
 PY
 )
