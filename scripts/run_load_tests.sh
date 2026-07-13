@@ -11,7 +11,9 @@ TARGET_URL="https://kiriland.unb.br/grupo9"
 # ===================================================================
 #   CONFIGURAÇÕES INSTITUCIONAIS DO KEYCLOAK (UNB)
 # ===================================================================
-export CLIENT_ID="admin-cli"
+# client_id da APLICAÇÃO, não o admin-cli interno do Keycloak — com admin-cli o
+# token vem sem preferred_username/roles (ver docs/estudo-metodologia-testes.md §5).
+export CLIENT_ID="pseudopep-frontend"
 export REALM="grupo09"
 export KEYCLOAK="https://kiriland.unb.br/keycloak"
 

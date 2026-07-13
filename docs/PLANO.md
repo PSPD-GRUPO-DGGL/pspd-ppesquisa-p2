@@ -1,5 +1,7 @@
 # PSPD — Projeto de Pesquisa: Observabilidade de microsserviços em cluster K8s
 
+> **Nota:** documento de planejamento inicial, escrito antes do deploy no cluster do professor. Nem tudo aqui foi executado como planejado. Os dashboards Grafana em `dashboards/`, por exemplo, nunca foram exportados; a observabilidade final usa Prometheus próprio (`docs/relatorio-final.md`, Seção 2.4). Estado final e resultados reais em `docs/relatorio-final.md` e `resultados/README.md`.
+
 ## Contexto
 
 Trabalho final de PSPD (UnB/FGA, Prof. Fernando W. Cruz), grupo DGGL de 4 alunos (Danilo, Gabriel, Guilherme, Luiz). Entrega em 11/07/2026.

@@ -1,10 +1,10 @@
-# PSPD 2026.1 — Projeto de Pesquisa: Observabilidade de microsserviços em cluster K8s
+# PSPD 2026.1 · Projeto de Pesquisa: Observabilidade de microsserviços em cluster K8s
 
 Aplicação de microsserviços para o Hospital Universitário, com dados clínicos expostos em HL7/FHIR sob três perfis de acesso, instrumentada com Prometheus/Grafana e submetida a testes de carga num cluster Kubernetes multi-nó.
 
-Disciplina PSPD (T02), Prof. Fernando William Cruz — UnB/FGA. Grupo DGGL.
+Disciplina PSPD (T02), Prof. Fernando William Cruz, UnB/FGA. Grupo DGGL.
 
-> **Estado atual.** Contratos, banco local de desenvolvimento, especificações, Data Transform Service, chat `epoll` com o experimento C10K e cenários k6 estão implementados. Depois das novas orientações do professor, a entrega final deve rodar no cluster institucional `kiriland`, namespace `grupo-9`, banco `pseudopep_g09`, Keycloak realm `grupo09` e URL `https://kiriland.unb.br/grupo9`. Authorization Service, Patient Data Service, API Gateway, frontend, manifests finais e observabilidade real no Grafana institucional ainda são o caminho crítico.
+> **Estado atual (2026-07-13): entregue e validado no cluster real.** A aplicação está deployada em `kiriland.unb.br`, namespace `grupo-9`, contra o banco `pseudopep_g09` e o Keycloak real (realm `grupo09`, client `pseudopep-frontend`), acessível em `https://kiriland.unb.br/grupo9`. Os quatro níveis de acesso (FULL, PARTIAL, ANONYMIZED, AGGREGATED, mais DENY) foram validados pela URL pública. A matriz de experimentos de carga (E0 a E5: baseline, escala do Transform, escala do Data, escala de tudo, autoscaling por HPA) rodou por completo. Resultados em `resultados/matriz-final/`, análise em `docs/relatorio-final.md`. A observabilidade usa Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), com Grafana lido fora do cluster via `port-forward`. Duas pendências: login via browser depende do professor liberar o redirect do Keycloak para `/grupo9`, e o experimento pgbouncer está planejado mas não implementado no `grupo-9`.
 
 ## Ambiente final da entrega
 
@@ -18,7 +18,8 @@ As orientações novas do professor sobre cluster, banco, Keycloak e Grafana pre
 | URL pública | `https://kiriland.unb.br/grupo9` |
 | Banco | `pseudopep_g09` |
 | Keycloak | `https://kiriland.unb.br/keycloak`, realm `grupo09` |
-| Grafana | `https://grafana.kiriland.unb.br`, dashboard Grupo 9 |
+| Grafana | Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), lido via `kubectl port-forward svc/prometheus 9090` + Grafana local. Integração com `https://grafana.kiriland.unb.br` (institucional) não confirmada. |
+| Registry de imagens | `docker.io/sanjos3` (`pspd-auth`, `pspd-data`, `pspd-transform`, `pspd-gateway`, tag `0.1.0`) |
 
 Segredos não devem ser versionados. Senhas de banco, tokens, kubeconfig, senha SSH e `ANON_SALT` devem entrar via `Secret` ou variável local.
 
@@ -34,7 +35,7 @@ Segredos não devem ser versionados. Senhas de banco, tokens, kubeconfig, senha 
   (JWT RS256)                 └──────────▶ Data Transform Service ┘
 ```
 
-O Gateway valida o JWT contra o JWKS do Keycloak e orquestra um **pipeline sequencial com ramo condicional** — não um fan-out paralelo. O Authorization Service precisa devolver o nível de acesso antes que o Transform possa aplicá-lo, e o Patient Data precisa devolver linhas antes do Transform. Uma negação corta o pipeline no primeiro estágio, sem tocar em banco.
+O Gateway valida o JWT contra o JWKS do Keycloak e orquestra um pipeline sequencial com ramo condicional, não um fan-out paralelo. O Authorization Service devolve o nível de acesso antes de o Transform aplicá-lo, e o Patient Data devolve linhas antes do Transform. Uma negação corta o pipeline no primeiro estágio, sem tocar em banco.
 
 ## O que já está pronto
 
@@ -47,8 +48,37 @@ O Gateway valida o JWT contra o JWKS do Keycloak e orquestra um **pipeline seque
 | Matriz de nível de acesso | `docs/matriz-acesso.md` | — (normativo) |
 | Mapeamento relacional → FHIR | `docs/mapeamento-fhir.md` | — (normativo) |
 | **Data Transform Service** | `servicos/transform/` | 52 testes + smoke gRPC + container |
+| **Authorization Service** | `servicos/auth/` | validado nos 4 fluxos contra o banco real |
+| **Patient Data Service** | `servicos/data/` | validado contra `pseudopep_g09`, tradução inglês→PT |
+| **API Gateway** (Node/Express) | `gateway/` | JWKS RS256, pipeline sequencial, deployado |
+| **Frontend** (Keycloak-js) | `frontend/` | UI por perfil, servido pelo próprio Gateway |
 | **Chat `epoll` + experimento C10K** | `chat/` | 3 servidores em C, medidos até 10k conexões |
-| **Cenários de carga k6** | `k6/` | 4 cenários, validados com `k6 inspect` |
+| **Cenários de carga k6** | `k6/` | 4 cenários, executados no cluster real |
+| **Manifests do `grupo-9`** | `k8s/app/` | deployados; 4 serviços `Running` |
+| **Prometheus próprio** | `k8s/app/prometheus.yaml` | 4 targets `up`, coletando |
+| **Matriz de experimentos E0–E5** | `scripts/exp_runner.sh`, `resultados/` | executada por completo no cluster real |
+
+## Resultados finais no cluster real
+
+Validação funcional (fase a): os quatro níveis de acesso, testados pela URL pública.
+
+| Nível | Usuário | Resultado |
+|---|---|---|
+| FULL | `med.cardoso` → `P090000002` | `200`, Bundle FHIR |
+| DENY | `med.cardoso` → `P090000001` (sem vínculo) | `403`, `sem_vinculo_ativo` |
+| PARTIAL | `est.ferreira` → `P090000030` | `200`, Bundle FHIR |
+| AGGREGATED | `pes.mendes` → `PRJ01_G09`/DIABETES | `200`, `MeasureReport` FHIR |
+
+Matriz de carga (fases b a d): throughput e erro real a 1000 VUs sustentados, por configuração de réplicas.
+
+| Config. | Throughput | p95 | Erro real |
+|---|---|---|---|
+| E0 (1 réplica cada, baseline) | 35,95 rps | 21.715 ms | 10,44% |
+| E2 (Transform×3) | 40,73 rps | 19.266 ms | 9,62% |
+| E3 (Data×3) | 38,25 rps | 21.272 ms | 9,87% |
+| E4 (todos×3) | **48,69 rps** | **12.511 ms** | **6,73%** |
+
+A CPU nunca satura em nenhum experimento, sempre abaixo de 15% da cota. O gargalo está distribuído pela cadeia de chamadas sequenciais (Gateway, Auth, Data, Transform) e no PostgreSQL compartilhado entre os 10 grupos da disciplina, não concentrado num serviço. Escalar Transform ou Data isoladamente ajuda pouco; só escalar todos os serviços juntos (E4) produz ganho substancial. O HPA (E5) escalou de 1 para 12 pods em cerca de 3 minutos e parou, com o motivo explícito `"All metrics below target"`, sinal de que a métrica que ele observa já estava satisfeita, não de falta de capacidade do cluster. Análise completa em `docs/relatorio-final.md`.
 
 ### O contraste que sustenta o experimento
 
@@ -56,10 +86,10 @@ Os índices são projetados para que os dois caminhos custem coisas diferentes. 
 
 | Caminho | Tempo | Plano |
 |---|---|---|
-| FULL — prontuário de 1 paciente | **0,25 ms** | index scan puro |
-| AGGREGATED — coorte Diabetes | **154,6 ms** | parallel seq scan de 961k linhas + sort externo em disco |
+| FULL (prontuário de 1 paciente) | **0,25 ms** | index scan puro |
+| AGGREGATED (coorte Diabetes) | **154,6 ms** | parallel seq scan de 961k linhas + sort externo em disco |
 
-Fator de ~620×. A coorte em si é resolvida por índice (barato, de propósito); o custo está na agregação. É isso que permite testar a hipótese central do trabalho: **escala horizontal ajuda serviço stateless compute-bound, mas não resolve um banco compartilhado.**
+Fator de ~620×. A coorte em si é resolvida por índice, barato de propósito. O custo está na agregação, e esse contraste permite testar a hipótese central do trabalho: escala horizontal ajuda serviço stateless compute-bound, mas não resolve um banco compartilhado.
 
 ### C10K: o custo de uma conexão ociosa
 
@@ -71,7 +101,7 @@ Três servidores de chat com o mesmo protocolo, 10 mil conexões e 1% ativas (`d
 | thread-por-conexão | 12,4 KB | 75.603 | 10.000 |
 | `select()` | — | — | **1.020** (teto do `FD_SETSIZE`) |
 
-O `epoll` mantém a mesma eficiência com mil ou dez mil conexões: é a propriedade O(1) medida. O `select()` não é lento, é impossível — `fd_set` tem 1024 bits e o limite é da libc, não do programa.
+O `epoll` mantém a mesma eficiência com mil ou dez mil conexões, a propriedade O(1) medida. O `select()` não é lento, é impossível: `fd_set` tem 1024 bits, e o limite é da libc, não do programa.
 
 ## Como rodar o que existe
 
@@ -118,9 +148,65 @@ cd chat && make todos
 
 `ANON_SALT` não tem valor padrão e o serviço **falha alto** sem ele. Isso é intencional: o espaço de `id_paciente` é pequeno e conhecido (50 mil valores), então pseudonimizar com salt público é reversível por força bruta em segundos. Ver `docs/matriz-acesso.md` §2.
 
-## Como rodar a Infraestrutura e Observabilidade
+## Como rodar no ambiente real (`grupo-9`)
 
-Esta seção descreve o laboratório local. Ela é útil para desenvolvimento, mas não substitui o deploy final no cluster institucional do professor.
+Runbook que coloca a aplicação no ar em `https://kiriland.unb.br/grupo9`. Pré-requisitos: `kubectl`, `docker` autenticado num registry público (`docker login`), e o `kubeconfig-grupo-9.yaml` fornecido pelo professor.
+
+```bash
+# 1. Build + push das 4 imagens para um registry público
+REGISTRY=docker.io/<seu_usuario> TAG=0.1.0 ./scripts/build_push.sh
+
+# 2. Secret com as credenciais reais do banco (fora do git)
+export KUBECONFIG=<caminho-do-kubeconfig>
+kubectl -n grupo-9 create secret generic pspd-db \
+  --from-literal=DB_HOST=192.168.122.1 \
+  --from-literal=DB_PORT=5432 \
+  --from-literal=DB_NAME=pseudopep_g09 \
+  --from-literal=DB_USER=grupo09_user \
+  --from-literal=DB_PASSWORD='<senha-do-professor>' \
+  --from-literal=ANON_SALT="$(openssl rand -hex 16)"
+
+# 3. Aplica os manifests (auth/data/transform/gateway/hpa/pdb/servicemonitors/ingress)
+REGISTRY=docker.io/<seu_usuario> TAG=0.1.0 KUBECONFIG="$KUBECONFIG" ./scripts/deploy.sh
+
+# 4. Prometheus próprio (observabilidade, ver Seção 2.4 do relatório)
+kubectl apply -f k8s/app/prometheus.yaml
+
+# 5. Verificar
+kubectl -n grupo-9 get pods,svc,ingress,hpa
+curl -s https://kiriland.unb.br/grupo9/healthz
+```
+
+Grafana local lendo o Prometheus do cluster, sem custo de cota:
+
+```bash
+kubectl -n grupo-9 port-forward svc/prometheus 9090
+# aponte um Grafana local (ex.: container docker) para http://localhost:9090
+```
+
+### Matriz de experimentos (fases b–e)
+
+Executada a partir da VM da disciplina, para não competir por CPU com os pods sob teste. `KUBECONFIG` e `PATH` precisam ser passados explicitamente se rodando via `systemd-run --user` (a VM acadêmica mata processos de sessões SSH encerradas; ver comentários em `scripts/exp_runner.sh`):
+
+```bash
+export KUBECONFIG=~/kubeconfig-grupo-9.yaml
+export K6_PASSWORD_MEDICO=... K6_PASSWORD_ESTAGIARIO=... K6_PASSWORD_PESQUISADOR=...
+export OUT=~/pspd-ppesquisa-p2/resultados/matriz-final
+
+./scripts/exp_runner.sh E0   # baseline, 1 réplica cada
+./scripts/exp_runner.sh E2   # Transform×3
+./scripts/exp_runner.sh E3   # Data×3
+./scripts/exp_runner.sh E4   # todos×3
+./scripts/exp_runner.sh E5   # HPA por CPU, rampa 10→1000 VUs
+
+cat "$OUT/matriz.csv"        # throughput/latência/erro/CPU/mem/pods por experimento e nível
+```
+
+Resultados consolidados e a análise completa estão em `docs/relatorio-final.md`, Seções 2.1–2.4.
+
+## Como rodar a Infraestrutura e Observabilidade (laboratório local)
+
+Esta seção descreve o laboratório local (Kind), útil para desenvolvimento e para a seção "montagem do Kubernetes" do relatório. Não é o ambiente da entrega: a validação e as medições finais foram feitas no cluster institucional (seção anterior). O HPA por métricas customizadas (`prometheus-adapter`, passo 5 abaixo) foi explorado só aqui, porque exige Helm e CRDs fora do escopo de RBAC do namespace `grupo-9` real.
 
 ### Pré-requisitos de Infraestrutura
 - **Windows Subsystem for Linux (WSL2)** com Docker Desktop ativo.
@@ -255,12 +341,12 @@ A alocação segue afinidade com o T1 e **grau de dependência**: quem depende d
 
 | Integrante | Responsabilidade | Estado |
 |---|---|---|
-| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · estrutura do relatório | ✅ tudo entregue, exceto o relatório |
-| **Danilo Carvalho Antunes** | Introspecção do banco institucional · **Authorization Service** · **Patient Data Service** · configuração segura de banco · experimento pgbouncer depois do caminho real | ⬜ especificado em `docs/plano-implementacao-danilo.md` |
-| **Guilherme Brito de Souza** | **API Gateway** validando JWKS do realm `grupo09` · orquestração `Auth -> Data -> Transform` · frontend OIDC · validação funcional ponta a ponta · OpenTelemetry | ⬜ especificado |
-| **Luiz Gustavo Lopes Campos** | Manifests finais para `grupo-9` · deploy em `kiriland` · Grafana institucional · HPA · execução k6 contra `/grupo9` · resiliência · consolidação do relatório/vídeo | 🟡 laboratório local pronto; final pendente |
+| **Gabriel Soares dos Anjos** | Base do projeto (contratos, banco, especificações) · **Data Transform Service** · **chat `epoll` + experimento C10K** · **cenários k6** · **API Gateway + frontend** (reescrita) · **manifests do `grupo-9`, deploy, Prometheus** · **matriz de experimentos E0–E5** · estrutura do relatório | ✅ entregue e validado no cluster real |
+| **Danilo Carvalho Antunes** | Introspecção do banco institucional · **Authorization Service** · **Patient Data Service**, validados nos 4 fluxos contra o banco real · configuração segura de banco | ✅ entregue; experimento pgbouncer planejado (não implementado no `grupo-9`) |
+| **Guilherme Brito de Souza** | Gateway/frontend iniciais (contratos não batiam com os serviços reais; substituídos pela reescrita) | 🟡 ver comentário pessoal no relatório |
+| **Luiz Gustavo Lopes Campos** | Infra de laboratório local (`mocks.yaml`, `kind-config`, `run_load_tests.sh`) · manifests iniciais no `grupo-9` (reconciliados) | 🟡 ver comentário pessoal no relatório |
 
-O plano completo, com a atualização normativa do cluster institucional, está em `docs/PLANO.md`. O plano da parte do Danilo está em `docs/plano-implementacao-danilo.md`.
+O plano completo, com a atualização normativa do cluster institucional, está em `docs/PLANO.md`. O plano da parte do Danilo está em `docs/plano-implementacao-danilo.md`. Autoavaliação individual de cada membro em `docs/relatorio-final.md`, Seção 5.
 
 ### Para quem vai implementar um serviço
 
@@ -280,7 +366,7 @@ O laboratório local assume um único host: Intel i7-1255U (12 threads), 16 GB d
 
 ## Referências
 
-- Arundel, J. e Domingus, J. *Cloud Native DevOps with Kubernetes*. O'Reilly, 2019. (Capítulos 15 e 16 — monitoramento e observabilidade.)
-- HL7 FHIR R4 — https://www.hl7.org/fhir/
-- Kubernetes — https://kubernetes.io
-- Prometheus — https://prometheus.io/
+- Arundel, J. e Domingus, J. *Cloud Native DevOps with Kubernetes*. O'Reilly, 2019. Capítulos 15 e 16, monitoramento e observabilidade.
+- HL7 FHIR R4: https://www.hl7.org/fhir/
+- Kubernetes: https://kubernetes.io
+- Prometheus: https://prometheus.io/

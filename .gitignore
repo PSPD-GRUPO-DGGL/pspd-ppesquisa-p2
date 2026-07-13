@@ -27,3 +27,7 @@ resultados/*.json
 # Ignora arquivos de credenciais reais de banco
 k8s/app/*secret-db.yaml
 !k8s/app/secret-db.example.yaml
+
+# Material de estudo pessoal, não faz parte da entrega
+docs/estudo-metodologia-testes.md
+docs/roteiro-gabriel.md
