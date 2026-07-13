@@ -1,10 +1,35 @@
 # PSPD 2026.1 · Projeto de Pesquisa: Observabilidade de microsserviços em cluster K8s
 
-Aplicação de microsserviços para o Hospital Universitário, com dados clínicos expostos em HL7/FHIR sob três perfis de acesso, instrumentada com Prometheus/Grafana e submetida a testes de carga num cluster Kubernetes multi-nó.
-
 Disciplina PSPD (T02), Prof. Fernando William Cruz, UnB/FGA. Grupo DGGL.
 
-> **Estado atual (2026-07-13): entregue e validado no cluster real.** A aplicação está deployada em `kiriland.unb.br`, namespace `grupo-9`, contra o banco `pseudopep_g09` e o Keycloak real (realm `grupo09`, client `pseudopep-frontend`), acessível em `https://kiriland.unb.br/grupo9`. Os quatro níveis de acesso (FULL, PARTIAL, ANONYMIZED, AGGREGATED, mais DENY) foram validados pela URL pública. A matriz de experimentos de carga (E0 a E5: baseline, escala do Transform, escala do Data, escala de tudo, autoscaling por HPA) rodou por completo. Resultados em `resultados/matriz-final/`, análise em `docs/relatorio-final.md`. A observabilidade usa Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), com Grafana lido fora do cluster via `port-forward`. Duas pendências: login via browser depende do professor liberar o redirect do Keycloak para `/grupo9`, e o experimento pgbouncer está planejado mas não implementado no `grupo-9`.
+## 📄 Relatório Final
+
+**[`docs/relatorio-final.md`](docs/relatorio-final.md) — leia este documento primeiro.** É onde estão a metodologia, as cinco fases exigidas pela especificação, os resultados medidos e a conclusão. O achado central do projeto está lá: em nenhum dos experimentos de carga a CPU chegou a saturar (sempre abaixo de 15% da cota), o que derruba a hipótese inicial de que o gargalo estaria concentrado num serviço. O gargalo real está distribuído pela cadeia de chamadas entre os serviços — por isso só escalar todos os quatro juntos produziu ganho de verdade (+35% de throughput, -42% de latência de cauda), enquanto escalar Transform ou Data isoladamente ajudou pouco. Esse resultado, e a análise completa do comportamento do autoscaling que veio junto com ele, é o principal produto técnico da entrega.
+
+Vídeo de apresentação: ver seção [Vídeo de apresentação](#vídeo-de-apresentação) abaixo. Dados brutos dos experimentos: [`resultados/README.md`](resultados/README.md).
+
+## Sobre o projeto
+
+Aplicação de microsserviços para o Hospital Universitário, com dados clínicos expostos em HL7/FHIR sob quatro níveis de acesso, instrumentada com Prometheus e submetida a testes de carga num cluster Kubernetes real, compartilhado com mais 9 grupos da disciplina.
+
+> **Estado atual (2026-07-13): entregue e validado no cluster real.** A aplicação está deployada em `kiriland.unb.br`, namespace `grupo-9`, contra o banco `pseudopep_g09` e o Keycloak real (realm `grupo09`, client `pseudopep-frontend`), acessível em `https://kiriland.unb.br/grupo9`. Os quatro níveis de acesso (FULL, PARTIAL, ANONYMIZED, AGGREGATED, mais DENY) foram validados pela URL pública. A matriz de experimentos de carga (E0 a E5: baseline, escala do Transform, escala do Data, escala de tudo, autoscaling por HPA) rodou por completo. A observabilidade usa Prometheus próprio no namespace (`k8s/app/prometheus.yaml`), com Grafana lido fora do cluster via `port-forward`. Duas pendências: login via browser depende do professor liberar o redirect do Keycloak para `/grupo9`, e o experimento pgbouncer está planejado mas não implementado no `grupo-9`.
+
+## Mapa do repositório
+
+| Pasta | Conteúdo |
+|---|---|
+| `docs/` | Relatório final, especificações normativas (mapeamento FHIR, matriz de acesso), documentos de planejamento |
+| `resultados/` | Dados brutos e leitura dos experimentos de carga (matriz E0–E5) |
+| `gateway/` | API Gateway (Node.js/Express): valida JWT, orquestra o pipeline, serve o frontend |
+| `frontend/` | Interface web (Keycloak-js), por perfil de acesso |
+| `servicos/` | Os três microsserviços Python/gRPC: `auth/` (Authorization), `data/` (Patient Data), `transform/` (Data Transform/FHIR) |
+| `proto/` | Contratos gRPC (fonte de verdade dos serviços) |
+| `db/` | Schema, seed e índices do banco (uso local/laboratório) |
+| `k8s/` | Manifests Kubernetes: `app/` (deploy real no `grupo-9`), `infra/` (laboratório local) |
+| `k6/` | Cenários de teste de carga |
+| `scripts/` | Automação: build/push de imagens, deploy, execução da matriz de experimentos |
+| `chat/` | Servidor de chat em C (`epoll`/`select`/threads) e experimento C10K, ponto extra da entrega |
+| `helm-values/`, `vms/` | Configuração do laboratório local (Kind, VMs via Multipass) |
 
 ## Ambiente final da entrega
 
