@@ -8,6 +8,10 @@ Disciplina PSPD (T02), Prof. Fernando William Cruz, UnB/FGA. Grupo DGGL.
 
 Vídeo de apresentação: ver seção [Vídeo de apresentação](#vídeo-de-apresentação) abaixo. Dados brutos dos experimentos: [`resultados/README.md`](resultados/README.md).
 
+## Vídeo de Apresentação do Projeto
+
+Link: [Apresentação 2](https://youtu.be/mbxKjoDHEh0)
+
 ## Sobre o projeto
 
 Aplicação de microsserviços para o Hospital Universitário, com dados clínicos expostos em HL7/FHIR sob quatro níveis de acesso, instrumentada com Prometheus e submetida a testes de carga num cluster Kubernetes real, compartilhado com mais 9 grupos da disciplina.
