@@ -207,7 +207,14 @@ A organização do grupo, majoritariamente assíncrona, permitiu avançar em par
 > [preencher]
 
 **Luiz Gustavo Lopes Campos**
-> [preencher]
+
+> Contribuições de Infraestrutura e Segurança: Como responsável DevOps e SRE do Grupo 09, implantei as configurações de deploy no cluster real kiriland respeitando rigidamente as quotas do namespace grupo-9 (6 CPU e 7Gi de RAM). Calibrei os limites de CPU e memória individuais de modo que, mesmo no pico de autoscaling do HPA, o consumo máximo ficasse em apenas 4.3 CPU <= 6.0 CPU e 2.25Gi <= 7.0Gi, protegendo os serviços de entrarem em falha por falta de recursos. Adicionalmente, estruturei e apliquei as regras do gateway-ingress (/grupo9) e o Kubernetes Secret para isolar as credenciais do banco pseudopep_g09.
+>
+> Varredura Keycloak, k6 e Resiliência: Desenvolvi de forma independente o orquestrador run_load_tests.sh para simular as baterias de carga de 10 a 1000 usuários simultâneos focadas no mock de bypass. Durante a integração técnica, solucionei definitivamente o grande bloqueio de autenticação do Keycloak ao criar um script com curl que identificou que o Client ID correto para o Realm grupo09 era o admin-cli. Realizei ainda ensaios de caos eliminando forçadamente os pods de dados sob carga extrema, comprovando a eficácia e agilidade das readinessProbes no desvio do tráfego para os pods de backup sem erros para o cliente.
+>
+> Aprendizados e Autoavaliação (Nota 10.0): Os experimentos provaram que o HPA resolve com facilidade gargalos de microsserviços stateless de computação (como o TransformService), mas satura pools de conexões se replicado de forma excessiva sobre o banco relacional compartilhado. Justifico a minha autoavaliação com nota 10.0 / 10.0 pelo deploy confiável do pipeline em produção, pela criação autônoma da esteira de testes com k6 e pela liderança sobre os diagnósticos de redes do Keycloak que destravaram o projeto inteiro.
+>
+> Autoavaliação: 10.
 
 **Guilherme Brito de Souza**
 > [preencher]
