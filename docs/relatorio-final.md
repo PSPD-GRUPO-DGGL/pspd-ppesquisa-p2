@@ -204,7 +204,14 @@ A organização do grupo, majoritariamente assíncrona, permitiu avançar em par
 > Autoavaliação: 10.
 
 **Danilo Carvalho Antunes**
-> [preencher]
+
+> Fiquei responsável pelo miolo do caminho de autorização e acesso aos dados clínicos: o Authorization Service e o Patient Data Service, os dois serviços que decidem *quem pode ver o quê* e buscam os dados crus antes de o Transform montar o FHIR. Antes de escrever qualquer serviço, fiz a introspecção do banco institucional (`pseudopep_g09`, ~1,4 milhão de eventos clínicos) e documentei o schema real, os tipos e os índices em `docs/relatorio-danilo-auth-data.md`. Isso se mostrou decisivo, porque o banco do professor usava nomes de coluna em inglês (`patient_id`, `full_name`, `event_type`, `code`) enquanto nossos contratos gRPC estavam em português; resolvi mantendo os contratos e fazendo alias no SQL, sem forçar mudança no resto do grupo.
+>
+> No Auth Service implementei as regras dos quatro níveis de acesso cruzando role e vínculo real no banco (médico ATTENDING → FULL, estagiário TRAINEE com supervisor → PARTIAL, pesquisador com projeto aprovado e vigente → AGGREGATED/ANONYMIZED), com dez motivos de negação distintos, incluindo o `sem_vinculo_ativo` que sustenta o caso DENY do relatório. No Data Service implementei os RPCs de busca individual, coorte e agregação — e precisei estender o contrato com `BuscarCoorte`, que faltava para o caminho ANONYMIZED conseguir puxar linhas individuais antes da anonimização. Instrumentei os dois serviços com métricas Prometheus (decisões de autorização, duração de query, pool de conexões, linhas retornadas, latência gRPC por método), escrevi seus Dockerfiles, os manifests base e os smokes que provam o pipeline `Auth → Data → Transform` rodando contra o banco real, antes mesmo de o Gateway entrar.
+>
+> Meu maior aprendizado foi que a parte difícil de um sistema distribuído não é o código do "caminho feliz", e sim adaptá-lo a um ambiente real que não corresponde à especificação: schema em inglês, valores numéricos guardados como texto, e regras de autorização que só fazem sentido quando cruzadas com dados de vínculo que existem de verdade no banco. Validar meus serviços de forma isolada, com smoke tests contra o banco institucional, foi o que permitiu que a integração com o Gateway na reta final acontecesse sem que a origem dos erros ficasse ambígua.
+>
+> Autoavaliação: 10.
 
 **Luiz Gustavo Lopes Campos**
 
