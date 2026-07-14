@@ -224,7 +224,14 @@ A organização do grupo, majoritariamente assíncrona, permitiu avançar em par
 > Autoavaliação: 10.
 
 **Guilherme Brito de Souza**
-> [preencher]
+
+>Fiquei responsável pelo, desenvolvimento e integração da Fronteira do Cliente (Frontend) com o API Gateway e o servidor de identidade. Implementei o fluxo completo de autenticação utilizando `keycloak-js`, além de gerenciar o estado da sessão, a extração de claims do token JWT e a renderização condicional das áreas do painel baseadas nos perfis de acesso (Médico, Estagiário e Pesquisador). 
+>
+> Minha maior dificuldade foi lidar com as políticas rígidas de segurança do Keycloak. Tentar testar o frontend rodando no `localhost` virou uma dor de cabeça, com o servidor recusando os logins sem parar e devolvendo erros como `400 Bad Request` e `Invalid parameter: redirect_uri`.
+>
+> Para destravar o projeto e não depender de mudanças no servidor central, mudei a estratégia. Abandonei o ambiente local e fiz o deploy do frontend direto no nosso namespace no Kubernetes (`kiriland`). Empacotei o HTML num servidor NGINX usando `ConfigMap`, configurei os manifestos de Ingress e alinhei a URL da nossa aplicação exatamente com o que o Keycloak esperava. Assim que a infraestrutura conversou na mesma língua, o login passou liso.
+>
+> Autoavaliação: 7.
 
 ## 6. Referências
 
